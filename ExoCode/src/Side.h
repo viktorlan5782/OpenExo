@@ -18,12 +18,12 @@
 
 #include "joint.h"
 #include "controller.h"
-#include "FSR.h"
+// #include "FSR.h" /* VLE_CLEAN: Non-CAN sensor comms removed */
 #include "ParseIni.h"
 #include "Board.h"
 #include "Utilities.h"
 #include "StatusDefs.h"
-#include "ThIMU.h"
+// #include "ThIMU.h" /* VLE_CLEAN: Non-CAN sensor comms removed */
 #include "InclinationDetector.h"
 
 #include <stdint.h>
@@ -163,9 +163,11 @@ class Side
         Arm1Joint _arm_1;   /**< Instance of an arm 1 joint */
         Arm2Joint _arm_2;   /**< Instance of an arm 2 joint */
         
+        /* VLE_CLEAN: Non-CAN sensor comms removed
         //FSR objects for the side. 
         FSR _heel_fsr;                        /**< Heel force sensitive resistor, typically is a raw value */
 		FSR_Regressed _toe_fsr;               /**< Toe force sensitive resistor, typically is a regressed value */
+        VLE_CLEAN */
 
         //Inclination object for the side
         InclinationDetector* inclination_detector;

@@ -1,3 +1,4 @@
+/* VLE_CLEAN: Non-CAN sensor comms removed - entire file commented out
 #ifndef WAISTBAROMETER_H
 #define WAISTBAROMETER_H
 
@@ -49,3 +50,4 @@ class WaistBarometer
 
 #endif // ARDUINO_ARDUINO_NANO33BLE
 #endif // WAISTBAROMETER_H
+VLE_CLEAN */

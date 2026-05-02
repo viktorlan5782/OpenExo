@@ -1,3 +1,4 @@
+/* VLE_CLEAN: Non-CAN sensor comms removed - entire file commented out
 /**
  * @file TorqueSensor.h
  * 
@@ -76,3 +77,4 @@ class TorqueSensor
 };
 #endif
 #endif
+VLE_CLEAN */

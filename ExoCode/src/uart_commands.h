@@ -10,7 +10,7 @@
 #include "JointData.h"
 #include "ParamsFromSD.h"
 #include "Logger.h"
-#include "RealTimeI2C.h"
+// #include "RealTimeI2C.h" /* VLE_CLEAN: Non-CAN sensor comms removed */
 #include "SystemReset.h"
 
 /**

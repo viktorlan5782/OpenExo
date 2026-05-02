@@ -1,3 +1,4 @@
+/* VLE_CLEAN: Non-CAN sensor comms removed - entire file commented out
 #if defined(ARDUINO_ARDUINO_NANO33BLE)
 
 #include "WaistBarometer.h"
@@ -25,3 +26,4 @@ float WaistBarometer::getPressure()
 }
 
 #endif
+VLE_CLEAN */

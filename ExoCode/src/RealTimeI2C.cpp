@@ -1,3 +1,4 @@
+/* VLE_CLEAN: Non-CAN sensor comms removed - entire file commented out
 #include "RealTimeI2C.h"
 
 #include "Config.h"
@@ -149,3 +150,4 @@ bool real_time_i2c::poll(float* pack_array)
     #endif
     return true;
 }
+VLE_CLEAN */

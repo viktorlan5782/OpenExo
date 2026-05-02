@@ -686,11 +686,11 @@ void loop()
 #include "src/uart_commands.h"
 #include "src/UART_msg_t.h"
 #include "src/ComsLed.h"
-#include "src/RealTimeI2C.h"
+// #include "src/RealTimeI2C.h" /* VLE_CLEAN: Non-CAN sensor comms removed */
 #include "src/GetBulkChar.h"
 
-#include "src/WaistBarometer.h"
-#include "src/InclineDetector.h"
+// #include "src/WaistBarometer.h" /* VLE_CLEAN: Non-CAN sensor comms removed */
+// #include "src/InclineDetector.h" /* VLE_CLEAN: Non-CAN sensor comms removed */
 
 #define MAIN_DEBUG 0
 
@@ -776,11 +776,13 @@ void setup()
         led->set_color(0, 255, 0);
     }
 
+    /* VLE_CLEAN: Non-CAN sensor comms removed
     #if REAL_TIME_I2C
       logger::print("Init I2C");  
       real_time_i2c::init();
       logger::print("Setup->End Setup");
     #endif
+    VLE_CLEAN */
 }
 
 void loop()

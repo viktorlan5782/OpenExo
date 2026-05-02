@@ -1,3 +1,4 @@
+/* VLE_CLEAN: Non-CAN sensor comms removed - entire file commented out
 #ifndef THIMU_H
 #define THIMU_H
 
@@ -25,3 +26,4 @@ class ThIMU
 
 #endif
 #endif
+VLE_CLEAN */

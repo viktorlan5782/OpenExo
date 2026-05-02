@@ -18,7 +18,7 @@
 #include "ExoData.h"
 #include "Motor.h"
 #include "Controller.h"
-#include "TorqueSensor.h"
+// #include "TorqueSensor.h" /* VLE_CLEAN: Non-CAN sensor comms removed */
 #include "ParseIni.h"
 #include "board.h"
 #include "Joint.h"
@@ -27,8 +27,8 @@
 #include "StatusDefs.h"
 #include "ErrorManager.h"
 
-#include "AnkleAngles.h"
-#include "AnkleIMU.h"
+// #include "AnkleAngles.h" /* VLE_CLEAN: Non-CAN sensor comms removed */
+// #include "AnkleIMU.h" /* VLE_CLEAN: Non-CAN sensor comms removed */
 
 #include <stdint.h>
 
@@ -44,8 +44,8 @@
  */
 class _Joint
 {
-	static uint8_t left_torque_sensor_used_count;   /**< Used to record how many sensors are already set */
-    static uint8_t right_torque_sensor_used_count;  /**< Used to record how many sensors are already set */
+	// static uint8_t left_torque_sensor_used_count;   /**< Used to record how many sensors are already set */ /* VLE_CLEAN */
+    // static uint8_t right_torque_sensor_used_count;  /**< Used to record how many sensors are already set */ /* VLE_CLEAN */
     
     static uint8_t left_motor_used_count;           /**< Used to record how many motors are already set for torque sensor pin assignment */
     static uint8_t right_motor_used_count;          /**< Used to record how many motors are already set for torque sensor pin assignment */
@@ -99,7 +99,7 @@ class _Joint
          * 
          * @return next pin to assign
          */
-        static unsigned int get_torque_sensor_pin(config_defs::joint_id, ExoData*);
+        // static unsigned int get_torque_sensor_pin(config_defs::joint_id, ExoData*); /* VLE_CLEAN */
         
         /**
          * @brief Takes in the joint id and exo data, and checks if the current joint is used.
@@ -115,7 +115,7 @@ class _Joint
 
         /** MOVE THESE BACK TO PROTECTED WHEN APP IS READY*/
         _Motor* _motor;                 /**< Pointer to the base _Motor class so we can use any motor type.*/
-        TorqueSensor _torque_sensor;    /**< Torque sensor for the joint*/
+        // TorqueSensor _torque_sensor;    /**< Torque sensor for the joint*/ /* VLE_CLEAN */
         _Controller* _controller;       /**< Pointer to the current controller. Using pointer so we just need to change the object we are pointing to when the controller changes.*/
 
         
@@ -220,6 +220,7 @@ class AnkleJoint : public _Joint
 		
     protected:
         
+        /* VLE_CLEAN: Non-CAN sensor comms removed
         //Ankle IMU Information
         AnkleIMU _imu;
         const float _imu_sample_rate_us{15000.0f};
@@ -227,6 +228,7 @@ class AnkleJoint : public _Joint
 
         //Ankle Angle Infromation
         AnkleAngles _ankle_angle;
+        VLE_CLEAN */
 
         //Objects for joint specific controllers
         ZeroTorque _zero_torque;                                /**< Zero torque controller */

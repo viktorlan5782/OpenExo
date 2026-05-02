@@ -9,9 +9,11 @@
 //Arduino compiles everything in the src folder even if not included so it causes and error for the nano if this is not included.
 #if defined(ARDUINO_TEENSY36)  || defined(ARDUINO_TEENSY41) 
 
+/* VLE_CLEAN: Non-CAN sensor comms removed
 //Initialize the used joint counters that will be used to select the TorqueSensor pin. If you don't do it it won't work.
 uint8_t _Joint::left_torque_sensor_used_count = 0;
 uint8_t _Joint::right_torque_sensor_used_count = 0;
+VLE_CLEAN */
 
 uint8_t _Joint::left_motor_used_count = 0;
 uint8_t _Joint::right_motor_used_count = 0;
@@ -23,7 +25,7 @@ uint8_t _Joint::right_motor_used_count = 0;
  * Only stores these objects, the id, exo_data pointer, and if it is left (for easy access)
  */
 _Joint::_Joint(config_defs::joint_id id, ExoData* exo_data)
-: _torque_sensor(_Joint::get_torque_sensor_pin(id, exo_data)) // <-- Initializer list
+// : _torque_sensor(_Joint::get_torque_sensor_pin(id, exo_data)) // <-- Initializer list /* VLE_CLEAN */
 {
     // logger::print("_Joint::right_torque_sensor_used_count : ");
     // logger::println(_Joint::right_torque_sensor_used_count);
@@ -76,12 +78,15 @@ _Joint::_Joint(config_defs::joint_id id, ExoData* exo_data)
 
 void _Joint::read_data()  
 {
+    /* VLE_CLEAN: Non-CAN sensor comms removed - torque sensor read
     //Read the torque sensor, and change sign based on side.
     _joint_data->torque_reading = (_joint_data->flip_direction ? -1.0 : 1.0) * _torque_sensor.read();
+    VLE_CLEAN */
     
     _joint_data->position = _joint_data->motor.p / _joint_data->motor.gearing;
     _joint_data->velocity = _joint_data->motor.v / _joint_data->motor.gearing;
 	
+	/* VLE_CLEAN: Non-CAN sensor comms removed - torque sensor offset/microSD
 	//Read the true torque sensor offset
 	_joint_data->torque_offset_reading = _torque_sensor.readOffset();
 	
@@ -94,6 +99,7 @@ void _Joint::read_data()
     {
 		_joint_data->torque_reading = _joint_data->torque_reading_microSD;
 	}
+	VLE_CLEAN */
 };
 
 void _Joint::check_calibration()  
@@ -102,6 +108,7 @@ void _Joint::check_calibration()
     // logger::print(uint8_t(_id));
     // logger::print("\t");
     
+    /* VLE_CLEAN: Non-CAN sensor comms removed - torque sensor calibration
     //Check if we are doing the calibration on the torque sensor
     _joint_data->calibrate_torque_sensor = _torque_sensor.calibrate(_joint_data->calibrate_torque_sensor);
     
@@ -109,6 +116,7 @@ void _Joint::check_calibration()
     {
         _data->set_status(status_defs::messages::torque_calibration);
     }
+    VLE_CLEAN */
 
     //logger::print("_Joint::check_calibration\n"); 
     
@@ -118,6 +126,7 @@ void _Joint::check_calibration()
     }
 };
 
+/* VLE_CLEAN: Non-CAN sensor comms removed - entire get_torque_sensor_pin function
 unsigned int _Joint::get_torque_sensor_pin(config_defs::joint_id id, ExoData* exo_data)
 {
     //logger::print("utils::get_joint_type(id) : ");
@@ -317,6 +326,7 @@ unsigned int _Joint::get_torque_sensor_pin(config_defs::joint_id id, ExoData* ex
 
     }
 };
+VLE_CLEAN */
 
 unsigned int _Joint::get_motor_enable_pin(config_defs::joint_id id, ExoData* exo_data)
 {

@@ -27,7 +27,7 @@
 	#define CRITICAL_BATT_VAL 18 //In volts. Battery voltage below this will trigger the low battery warning in the GUI.
 	#define RESISTOR_1 46700 //Set it to the measured resistance of R1 on the OpenExo Board 0.5.1 Mark 3, and update the volt_sense pin mapping in Board.h
 	#define RESISTOR_2 4670 //Set it to the measured resistance of R2 on the OpenExo Board 0.5.1 Mark 3, and update the volt_sense pin mapping in Board.h
-    #define REAL_TIME_I2C 1
+    #define REAL_TIME_I2C 0 /* VLE_CLEAN: was 1, disabled */
     #define LOOP_FREQ_HZ 500
     #define LOOP_TIME_TOLERANCE 0.1 
     

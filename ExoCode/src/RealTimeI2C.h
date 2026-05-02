@@ -1,3 +1,4 @@
+/* VLE_CLEAN: Non-CAN sensor comms removed - entire file commented out
 #ifndef REAL_TIME_I2C_H
 #define REAL_TIME_I2C_H
 #include "Arduino.h"
@@ -25,3 +26,5 @@ namespace real_time_i2c
 };
 
 #endif
+
+VLE_CLEAN */

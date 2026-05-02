@@ -1,3 +1,4 @@
+/* VLE_CLEAN: Non-CAN sensor comms removed - entire file commented out
 /**
  * @file AnkleAngles.h
  * @author Chancelor Cuddeback
@@ -76,3 +77,4 @@ class AnkleAngles
 
 #endif
 #endif
+VLE_CLEAN */

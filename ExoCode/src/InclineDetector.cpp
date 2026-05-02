@@ -1,3 +1,4 @@
+/* VLE_CLEAN: Non-CAN sensor comms removed - entire file commented out
 #if defined(ARDUINO_ARDUINO_NANO33BLE)
 
 #include "InclineDetector.h"
@@ -80,3 +81,4 @@ void InclineDetector::setThreshold(float threshold)
 }
 
 #endif
+VLE_CLEAN */

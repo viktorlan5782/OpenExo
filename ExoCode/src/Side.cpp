@@ -17,8 +17,10 @@ Side::Side(bool is_left, ExoData* exo_data)
 , _elbow((config_defs::joint_id)((uint8_t)(is_left ? config_defs::joint_id::left : config_defs::joint_id::right) | (uint8_t)config_defs::joint_id::elbow), exo_data)
 , _arm_1((config_defs::joint_id)((uint8_t)(is_left ? config_defs::joint_id::left : config_defs::joint_id::right) | (uint8_t)config_defs::joint_id::arm_1), exo_data)
 , _arm_2((config_defs::joint_id)((uint8_t)(is_left ? config_defs::joint_id::left : config_defs::joint_id::right) | (uint8_t)config_defs::joint_id::arm_2), exo_data)
+/* VLE_CLEAN: Non-CAN sensor comms removed
 , _heel_fsr(is_left ? logic_micro_pins::fsr_sense_left_heel_pin : logic_micro_pins::fsr_sense_right_heel_pin) //Check if it is the left and use the appropriate pin for the side.
 , _toe_fsr(is_left ? logic_micro_pins::fsr_sense_left_toe_pin : logic_micro_pins::fsr_sense_right_toe_pin)
+VLE_CLEAN */
 {
 
     _data = exo_data;
@@ -52,8 +54,10 @@ Side::Side(bool is_left, ExoData* exo_data)
         logger::println("Side :: Constructor : Exit");
     #endif
 
+    /* VLE_CLEAN: Non-CAN sensor comms removed
     _heel_fsr.get_contact_thresholds(_side_data->heel_fsr_lower_threshold, _side_data->heel_fsr_upper_threshold);
     _toe_fsr.get_contact_thresholds(_side_data->toe_fsr_lower_threshold, _side_data->toe_fsr_upper_threshold);
+    VLE_CLEAN */
 
     inclination_detector = new InclinationDetector();
 };
@@ -102,6 +106,7 @@ void Side::run_side()
 
 void Side::read_data()
 {
+    /* VLE_CLEAN: Non-CAN sensor comms removed - FSR reads and gait detection
     //Check the FSRs
     _side_data->heel_fsr = _heel_fsr.read();
     _side_data->toe_fsr = _toe_fsr.read();
@@ -139,6 +144,7 @@ void Side::read_data()
     //Get the contact thesholds for the Heel and Toe FSRs
     _heel_fsr.get_contact_thresholds(_side_data->heel_fsr_lower_threshold, _side_data->heel_fsr_upper_threshold);
     _toe_fsr.get_contact_thresholds(_side_data->toe_fsr_lower_threshold, _side_data->toe_fsr_upper_threshold);
+    VLE_CLEAN */
 
     //Check the inclination
     _side_data->inclination = inclination_detector->check(_side_data->toe_stance, _side_data->do_calibration_refinement_toe_fsr, _side_data->ankle.joint_position);
@@ -176,6 +182,7 @@ void Side::check_calibration()
     if (_side_data->is_used)
     {
         //Make sure FSR calibration is done before refinement.
+        /* VLE_CLEAN: Non-CAN sensor comms removed - FSR calibration
         if (_side_data->do_calibration_toe_fsr)
         {
             _side_data->do_calibration_toe_fsr = _toe_fsr.calibrate(_side_data->do_calibration_toe_fsr);
@@ -197,6 +204,7 @@ void Side::check_calibration()
             _side_data->do_calibration_refinement_heel_fsr = _heel_fsr.refine_calibration(_side_data->do_calibration_refinement_heel_fsr);
             _data->set_status(status_defs::messages::fsr_refinement);
         }
+        VLE_CLEAN */
      
         //Check the joint sensors if the joint is used.
         if (_side_data->hip.is_used)
@@ -221,8 +229,10 @@ void Side::check_calibration()
 
 void Side::_check_thresholds()
 {
+    /* VLE_CLEAN: Non-CAN sensor comms removed - FSR thresholds
     _toe_fsr.set_contact_thresholds(_side_data->toe_fsr_lower_threshold, _side_data->toe_fsr_upper_threshold);
     _heel_fsr.set_contact_thresholds(_side_data->heel_fsr_lower_threshold, _side_data->heel_fsr_upper_threshold);
+    VLE_CLEAN */
 }
 
 bool Side::_check_ground_strike()
@@ -230,8 +240,12 @@ bool Side::_check_ground_strike()
     _side_data->prev_heel_stance = _prev_heel_contact_state;  
     _side_data->prev_toe_stance = _prev_toe_contact_state;
 
+    /* VLE_CLEAN: Non-CAN sensor comms removed - FSR ground contact
     bool heel_contact_state = _heel_fsr.get_ground_contact();
     bool toe_contact_state = _toe_fsr.get_ground_contact();
+    VLE_CLEAN */
+    bool heel_contact_state = false; // VLE_CLEAN: placeholder
+    bool toe_contact_state = false;  // VLE_CLEAN: placeholder
 
     _side_data->heel_stance = heel_contact_state;
     _side_data->toe_stance = toe_contact_state;

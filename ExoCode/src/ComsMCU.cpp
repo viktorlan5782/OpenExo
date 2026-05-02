@@ -155,7 +155,8 @@ void ComsMCU::update_gui()
     static float* rt_floats = new float(rt_data::len);
 
     //Get real time data from ExoData and send to GUI
-    const bool new_rt_data = real_time_i2c::poll(rt_floats);
+    // const bool new_rt_data = real_time_i2c::poll(rt_floats); /* VLE_CLEAN: Non-CAN sensor comms removed */
+    const bool new_rt_data = rt_data::new_rt_msg; /* VLE_CLEAN: fallback to UART rt data */
     static float del_t_no_msg = millis();
 
     if (new_rt_data || rt_data::new_rt_msg)

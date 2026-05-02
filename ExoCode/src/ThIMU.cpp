@@ -1,3 +1,4 @@
+/* VLE_CLEAN: Non-CAN sensor comms removed - entire file commented out
 #include "ThIMU.h"
 #include "Logger.h"
 
@@ -108,3 +109,5 @@ bool ThIMU::_handshake()
 
 #endif
 
+
+VLE_CLEAN */

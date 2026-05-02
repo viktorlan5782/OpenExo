@@ -1,3 +1,4 @@
+/* VLE_CLEAN: Non-CAN sensor comms removed - entire file commented out
 #include "TorqueSensor.h"
 #include "Logger.h"
 //#define TORQUE_DEBUG 1        //Uncomment if you want to print debug statments to serial monitor. 
@@ -176,3 +177,4 @@ float TorqueSensor::read_microSD(float _calibration_microSD)
 };
 
 #endif
+VLE_CLEAN */

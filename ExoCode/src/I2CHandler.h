@@ -1,3 +1,4 @@
+/* VLE_CLEAN: Non-CAN sensor comms removed - entire file commented out
 /**
  * @file I2CHandler.h
  * @author Chancelor Cuddeback
@@ -149,3 +150,4 @@ namespace i2c_cmds
 // int Cal = 0x5000;                //Calibration value in hex. Cal = 0.04096/(CurrentLSB*ShuntResistance). Shunt resistance on Rev3/4 is 2mOhm.
 
 #endif
+VLE_CLEAN */

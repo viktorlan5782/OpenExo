@@ -1,3 +1,4 @@
+/* VLE_CLEAN: Non-CAN sensor comms removed - entire file commented out
 
 #include "FSR.h"
 
@@ -439,3 +440,4 @@ void FSR_Regressed::set_contact_thresholds(float lower_threshold_percent_ground_
     _upper_threshold_percent_ground_contact = upper_threshold_percent_ground_contact;
 };
 #endif
+VLE_CLEAN */

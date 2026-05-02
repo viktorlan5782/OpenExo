@@ -1,3 +1,4 @@
+/* VLE_CLEAN: Non-CAN sensor comms removed - entire file commented out
 /**
  * @file FSR.h
  *
@@ -235,3 +236,4 @@ class FSR_Regressed
 };
 #endif
 #endif
+VLE_CLEAN */

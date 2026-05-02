@@ -1,3 +1,4 @@
+/* VLE_CLEAN: Non-CAN sensor comms removed - entire file commented out
 #include "AnkleAngles.h"
 #include "Utilities.h"
 #include "Logger.h"
@@ -71,3 +72,4 @@ float AnkleAngles::_update_population_statistics(const float new_value)
 
 
 #endif
+VLE_CLEAN */

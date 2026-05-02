@@ -1,3 +1,4 @@
+/* VLE_CLEAN: Non-CAN sensor comms removed - entire file commented out
 #include "AnkleIMU.h"
 #include <Arduino.h>
 #include <utility/imumaths.h>
@@ -69,3 +70,4 @@ float AnkleIMU::get_global_angle()
 }
 
 #endif
+VLE_CLEAN */

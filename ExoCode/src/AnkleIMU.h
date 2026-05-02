@@ -1,3 +1,4 @@
+/* VLE_CLEAN: Non-CAN sensor comms removed - entire file commented out
 /**
  * @file AnkleIMU.h
  * @author Chancelor Cuddeback
@@ -45,3 +46,4 @@ class AnkleIMU
 
 
 #endif
+VLE_CLEAN */
