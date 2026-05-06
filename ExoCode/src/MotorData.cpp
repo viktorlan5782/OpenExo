@@ -42,6 +42,20 @@ static uint8_t motor_data_default_pda_id(config_defs::joint_id id)
     }
 }
 
+static int motor_data_gear_idx(config_defs::joint_id id)
+{
+    switch ((uint8_t)id & (~(uint8_t)config_defs::joint_id::left & ~(uint8_t)config_defs::joint_id::right))
+    {
+        case (uint8_t)config_defs::joint_id::hip: return config_defs::hip_gear_idx;
+        case (uint8_t)config_defs::joint_id::knee: return config_defs::knee_gear_idx;
+        case (uint8_t)config_defs::joint_id::ankle: return config_defs::ankle_gear_idx;
+        case (uint8_t)config_defs::joint_id::elbow: return config_defs::elbow_gear_idx;
+        case (uint8_t)config_defs::joint_id::arm_1: return config_defs::arm_1_gear_idx;
+        case (uint8_t)config_defs::joint_id::arm_2: return config_defs::arm_2_gear_idx;
+        default: return config_defs::hip_gear_idx;
+    }
+}
+
 static int motor_data_pda_can_id_idx(config_defs::joint_id id)
 {
     switch (id)
@@ -184,6 +198,7 @@ MotorData::MotorData(config_defs::joint_id id, uint8_t* config_to_send)
 {
     this->id = id;
     this->is_left = ((uint8_t)this->id & (uint8_t)config_defs::joint_id::left) == (uint8_t)config_defs::joint_id::left;
+    this->gearing_model = config_to_send[motor_data_gear_idx(this->id)];
     
     switch ((uint8_t)this->id & (~(uint8_t)config_defs::joint_id::left & ~(uint8_t)config_defs::joint_id::right))  //Use the id with the side masked out.
     {
@@ -482,6 +497,8 @@ MotorData::MotorData(config_defs::joint_id id, uint8_t* config_to_send)
 
 void MotorData::reconfigure(uint8_t* config_to_send) 
 {
+    this->gearing_model = config_to_send[motor_data_gear_idx(this->id)];
+
     switch ((uint8_t)this->id & (~(uint8_t)config_defs::joint_id::left & ~(uint8_t)config_defs::joint_id::right))  //Use the id with the side masked out.
     {
         case (uint8_t)config_defs::joint_id::hip:

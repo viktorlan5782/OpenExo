@@ -56,6 +56,10 @@ class JointData {
         float joint_global_angle;                   /**< The angle of the joint relative to the ground */
         float prev_joint_position;                  /**< The previous position of the joint, after any transmission */
         float joint_velocity;                       /**< The velocity of the joint, after any transmission */
+        bool transmission_angle_valid;              /**< True when an external transmission angle estimate is valid. */
+        float transmission_joint_angle_rad;         /**< External transmission joint angle estimate in rad. */
+        float transmission_joint_velocity_rad_s;    /**< External transmission joint velocity estimate in rad/s. */
+        float transmission_joint_torque_estimate_nm; /**< Model-estimated joint torque in Nm for logging and diagnostics. */
         const float joint_position_alpha = 1;
         const float joint_velocity_alpha = 0.05f;
 		const float joint_RoM;                      /**< Joint Range of Motion */

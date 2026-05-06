@@ -51,6 +51,7 @@ class MotorData
         bool is_left;               /**< Motor side information 1 if on the left, 0 otherwise */
         bool flip_direction;        /**< Should the motor direction be flipped, if true torque commands and position/velocity information will be inverted */
         float gearing;              /**< Motor gearing used to convert motor position, velocity, and torque between the motor and joint frames. */
+        uint8_t gearing_model;      /**< Raw parsed gearing/transmission model enum from config.ini. */
 
         //Timeout state
         int timeout_count;          /**< Number of timeouts in a row */

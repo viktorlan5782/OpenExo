@@ -28,6 +28,10 @@ JointData::JointData(config_defs::joint_id id, uint8_t* config_to_send, float jo
     this->joint_global_angle = 0;
     this->prev_joint_position = 0;
     this->joint_velocity = 0;
+    this->transmission_angle_valid = false;
+    this->transmission_joint_angle_rad = 0;
+    this->transmission_joint_velocity_rad_s = 0;
+    this->transmission_joint_torque_estimate_nm = 0;
     
     switch ((uint8_t)this->id & (~(uint8_t)config_defs::joint_id::left & ~(uint8_t)config_defs::joint_id::right))  //Use the id with the side masked out.
     {

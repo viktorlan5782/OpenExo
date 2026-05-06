@@ -129,6 +129,7 @@ namespace config_defs
         gearing_2_1 = 2,
         gearing_3_1 = 3,
         gearing_4_5_1 = 4,
+        ankle_bowden_nku = 5,
     };
     
     
@@ -564,6 +565,7 @@ namespace config_defs
             {"2", (uint8_t)config_defs::gearing::gearing_2_1}, 
             {"3", (uint8_t)config_defs::gearing::gearing_3_1}, 
             {"4.5", (uint8_t)config_defs::gearing::gearing_4_5_1},
+            {"ANKLE_BOWDEN_NKU", (uint8_t)config_defs::gearing::ankle_bowden_nku},
         };
         
         

@@ -3,6 +3,7 @@
 #include "Logger.h"
 #include "ErrorReporter.h"
 #include "error_codes.h"
+#include "AnkleBowdenNkuTransmission.h"
 
 //#define JOINT_DEBUG       //Uncomment if you want to print debug statements to serial monitor.
 
@@ -15,6 +16,12 @@ uint8_t _Joint::right_torque_sensor_used_count = 0;
 
 uint8_t _Joint::left_motor_used_count = 0;
 uint8_t _Joint::right_motor_used_count = 0;
+
+static bool joint_uses_ankle_bowden_nku(config_defs::joint_id id, JointData* joint_data)
+{
+    return (utils::get_joint_type(id) == (uint8_t)config_defs::joint_id::ankle) &&
+           (joint_data->motor.gearing_model == (uint8_t)config_defs::gearing::ankle_bowden_nku);
+}
 
 /*
  * Constructor for the joint
@@ -79,8 +86,24 @@ void _Joint::read_data()
     //Read the torque sensor, and change sign based on side.
     _joint_data->torque_reading = (_joint_data->flip_direction ? -1.0 : 1.0) * _torque_sensor.read();
     
-    _joint_data->position = _joint_data->motor.p / _joint_data->motor.gearing;
-    _joint_data->velocity = _joint_data->motor.v / _joint_data->motor.gearing;
+    if (joint_uses_ankle_bowden_nku(_id, _joint_data))
+    {
+        if (_joint_data->transmission_angle_valid && ankle_bowden_nku::valid_float(_joint_data->transmission_joint_angle_rad))
+        {
+            _joint_data->position = ankle_bowden_nku::saturate_angle_rad(_joint_data->transmission_joint_angle_rad);
+            _joint_data->velocity = ankle_bowden_nku::valid_float(_joint_data->transmission_joint_velocity_rad_s) ? _joint_data->transmission_joint_velocity_rad_s : 0.0f;
+        }
+        else
+        {
+            _joint_data->position = 0.0f;
+            _joint_data->velocity = 0.0f;
+        }
+    }
+    else
+    {
+        _joint_data->position = _joint_data->motor.p / _joint_data->motor.gearing;
+        _joint_data->velocity = _joint_data->motor.v / _joint_data->motor.gearing;
+    }
 	
 	//Read the true torque sensor offset
 	_joint_data->torque_offset_reading = _torque_sensor.readOffset();
@@ -1125,12 +1148,32 @@ void AnkleJoint::run_joint()
         logger::print("AnkleJoint::run_joint::Start");
     #endif
 
+    const bool use_ankle_bowden_nku = joint_uses_ankle_bowden_nku(_id, _joint_data);
+
     //Angle Sensor data
     _joint_data->prev_joint_position = _joint_data->joint_position;
-    const float raw_angle = _joint_data->joint_RoM * _ankle_angle.get(_is_left, false);
-    const float new_angle = _joint_data->do_flip_angle ? (_joint_data->joint_RoM - raw_angle):(raw_angle);
-    _joint_data->joint_position = utils::ewma(new_angle, _joint_data->joint_position, _joint_data->joint_position_alpha);
-    _joint_data->joint_velocity = utils::ewma((_joint_data->joint_position - _joint_data->prev_joint_position) / (1.0f / LOOP_FREQ_HZ), _joint_data->joint_velocity, _joint_data->joint_velocity_alpha);
+    if (use_ankle_bowden_nku)
+    {
+        if (_joint_data->transmission_angle_valid && ankle_bowden_nku::valid_float(_joint_data->transmission_joint_angle_rad))
+        {
+            const float theta_rad = ankle_bowden_nku::saturate_angle_rad(_joint_data->transmission_joint_angle_rad);
+            const float omega_rad_s = ankle_bowden_nku::valid_float(_joint_data->transmission_joint_velocity_rad_s) ? _joint_data->transmission_joint_velocity_rad_s : 0.0f;
+
+            _joint_data->joint_position = utils::ewma(theta_rad * ankle_bowden_nku::RAD_TO_DEG, _joint_data->joint_position, _joint_data->joint_position_alpha);
+            _joint_data->joint_velocity = utils::ewma(omega_rad_s * ankle_bowden_nku::RAD_TO_DEG, _joint_data->joint_velocity, _joint_data->joint_velocity_alpha);
+        }
+        else
+        {
+            _joint_data->joint_velocity = 0.0f;
+        }
+    }
+    else
+    {
+        const float raw_angle = _joint_data->joint_RoM * _ankle_angle.get(_is_left, false);
+        const float new_angle = _joint_data->do_flip_angle ? (_joint_data->joint_RoM - raw_angle):(raw_angle);
+        _joint_data->joint_position = utils::ewma(new_angle, _joint_data->joint_position, _joint_data->joint_position_alpha);
+        _joint_data->joint_velocity = utils::ewma((_joint_data->joint_position - _joint_data->prev_joint_position) / (1.0f / LOOP_FREQ_HZ), _joint_data->joint_velocity, _joint_data->joint_velocity_alpha);
+    }
 
     // Serial.print(_is_left ? "Left " : "Right ");
     // Serial.print("Ankle Angle: ");
@@ -1178,7 +1221,35 @@ void AnkleJoint::run_joint()
     }
 
     //Send the new command to the motor.
-    _motor->transaction(_joint_data->controller.setpoint / _joint_data->motor.gearing);
+    float motor_command_nm = _joint_data->controller.setpoint / _joint_data->motor.gearing;
+
+    if (use_ankle_bowden_nku)
+    {
+        motor_command_nm = 0.0f;
+        _joint_data->transmission_joint_torque_estimate_nm = 0.0f;
+
+        if (!_joint_data->transmission_angle_valid || !ankle_bowden_nku::valid_float(_joint_data->transmission_joint_angle_rad))
+        {
+            _joint_data->motor.enabled = false;
+        }
+        else
+        {
+            const float theta_rad = ankle_bowden_nku::saturate_angle_rad(_joint_data->transmission_joint_angle_rad);
+            float mapped_motor_torque_nm = 0.0f;
+
+            if (ankle_bowden_nku::motor_torque_from_joint_torque(_joint_data->controller.setpoint, theta_rad, &mapped_motor_torque_nm))
+            {
+                motor_command_nm = mapped_motor_torque_nm;
+                _joint_data->transmission_joint_torque_estimate_nm = ankle_bowden_nku::joint_torque_from_motor_torque(_joint_data->motor.i * _joint_data->motor.kt, theta_rad);
+            }
+            else
+            {
+                _joint_data->motor.enabled = false;
+            }
+        }
+    }
+
+    _motor->transaction(motor_command_nm);
 
     #ifdef JOINT_DEBUG
         logger::print("Ankle::run_joint::Motor Command:: ");
