@@ -202,7 +202,6 @@ void loop()
 
             //Handles desired operations if in headless mode
             #ifdef HEADLESS
-=
                 //Set the controller parameters to thier default
                 set_controller_params((uint8_t) exo_data.right_side.hip.id, config_info::config_to_send[config_defs::exo_hip_default_controller_idx], 0, &exo_data);
                 
@@ -254,7 +253,6 @@ void loop()
 
             //Handles desired operations if in headless mode
             #ifdef HEADLESS
-=
                 //Set the controller parameters to thier default
                 set_controller_params((uint8_t) exo_data.right_side.knee.id, config_info::config_to_send[config_defs::exo_knee_default_controller_idx], 0, &exo_data);
                 
