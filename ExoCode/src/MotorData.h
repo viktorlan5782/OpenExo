@@ -55,6 +55,25 @@ class MotorData
         //Timeout state
         int timeout_count;          /**< Number of timeouts in a row */
         int timeout_count_max = 40; /**< Number of timeouts in a row before the motor is disabled */
+
+        //PDA-series feedback state. Native PDA units are kept here; p/v/i mirror legacy OpenExo units.
+        uint8_t pda_id;             /**< PDA CAN node ID, not the OpenExo joint_id bitmask. */
+        uint8_t pda_control_mode;   /**< Default PDA control mode selected in config.ini. */
+        float pda_angle_deg;        /**< PDA output-shaft angle feedback in degrees. */
+        float pda_speed_rpm;        /**< PDA output-shaft speed feedback in revolutions per minute. */
+        float pda_torque_nm;        /**< PDA output torque feedback in Nm. */
+        float pda_voltage_v;        /**< PDA bus voltage feedback in V, when explicitly read. */
+        float pda_current_a;        /**< PDA q-axis current feedback in A, when explicitly read. */
+        float pda_torque_limit_nm;  /**< Software torque saturation for PDA command in Nm. */
+        float pda_speed_limit_rpm;  /**< Software speed saturation for PDA native modes in rpm. */
+        float pda_rated_torque_nm;  /**< Rated continuous torque in Nm. */
+        float pda_peak_torque_nm;   /**< Peak/stall torque in Nm. */
+        float pda_rated_speed_rpm;  /**< Rated speed in rpm. */
+        float pda_rated_current_a;  /**< Rated phase/current-loop value in A. */
+        float pda_stall_current_a;  /**< Stall current in A. */
+        float pda_rotor_inertia_gcm2; /**< Rotor inertia in g*cm^2. */
+        uint32_t pda_last_feedback_us; /**< Timestamp of the last decoded PDA feedback frame. */
+        bool pda_feedback_valid;    /**< True after at least one valid PDA feedback frame. */
 		
 		//Real-time Maxon Motor Reset Feedback
 		int maxon_plotting_scalar = 1;

@@ -6,11 +6,14 @@
 
 #include "Motor.h"
 #include "CAN.h"
+#include "Config.h"
 #include "ErrorManager.h"
 #include "error_codes.h"
 #include "Logger.h"
 #include "ErrorReporter.h"
 #include "error_codes.h"
+#include <string.h>
+#include <math.h>
 //#define MOTOR_DEBUG           //Uncomment if you want to print debug statments to the serial monitor
 
 //Arduino compiles everything in the src folder even if not included so it causes and error for the nano if this is not included.
@@ -675,6 +678,681 @@ _CANMotor(id, exo_data, enable_pin)
 #endif
 };
 
+
+namespace pda_cmd
+{
+    const uint8_t SYSTEM = 0x08;
+    const uint8_t ADAPTIVE_POSITION = 0x0B;
+    const uint8_t PRESET = 0x0C;
+    const uint8_t MOTION_AID = 0x0D;
+    const uint8_t SET_POSITION_TRACK = 0x19;
+    const uint8_t SET_POSITION_TRAPEZOID = 0x1A;
+    const uint8_t SET_POSITION_FF = 0x1B;
+    const uint8_t SET_SPEED = 0x1C;
+    const uint8_t SET_TORQUE = 0x1D;
+    const uint8_t WRITE_PROPERTY = 0x1F;
+
+    const uint16_t INPUT_MODE_PASSTHROUGH = 1;
+    const uint16_t INPUT_MODE_VEL_RAMP = 2;
+    const uint16_t INPUT_MODE_TORQUE_RAMP = 6;
+}
+
+static const PdaModelSpec PDA08_SPEC = {
+    pda_config::PDA08_RATED_TORQUE_NM,
+    pda_config::PDA08_PEAK_TORQUE_NM,
+    pda_config::PDA08_RATED_SPEED_RPM,
+    pda_config::PDA08_RATED_CURRENT_A,
+    pda_config::PDA08_STALL_CURRENT_A,
+    pda_config::PDA08_ROTOR_INERTIA_GCM2
+};
+
+static const PdaModelSpec PDA01_SPEC = {
+    pda_config::PDA01_RATED_TORQUE_NM,
+    pda_config::PDA01_PEAK_TORQUE_NM,
+    pda_config::PDA01_RATED_SPEED_RPM,
+    pda_config::PDA01_RATED_CURRENT_A,
+    pda_config::PDA01_STALL_CURRENT_A,
+    pda_config::PDA01_ROTOR_INERTIA_GCM2
+};
+
+PdaMotor::PdaMotor(config_defs::joint_id id, ExoData* exo_data, int enable_pin, const PdaModelSpec& spec)
+: _Motor(id, exo_data, enable_pin)
+, _spec(spec)
+{
+    _pda_id = _motor_data->pda_id;
+    _enable_response = false;
+    _feedback_configured = false;
+
+    _Kt = 1.0f;
+    _motor_data->kt = _Kt;
+    _motor_data->pda_id = _pda_id;
+    _motor_data->pda_rated_torque_nm = _spec.rated_torque_nm;
+    _motor_data->pda_peak_torque_nm = _spec.peak_torque_nm;
+    _motor_data->pda_rated_speed_rpm = _spec.rated_speed_rpm;
+    _motor_data->pda_rated_current_a = _spec.rated_current_a;
+    _motor_data->pda_stall_current_a = _spec.stall_current_a;
+    _motor_data->pda_rotor_inertia_gcm2 = _spec.rotor_inertia_gcm2;
+
+    if (_motor_data->pda_torque_limit_nm <= 0.0f || _motor_data->pda_torque_limit_nm > _spec.rated_torque_nm)
+    {
+        _motor_data->pda_torque_limit_nm = _spec.rated_torque_nm;
+    }
+
+    if (_motor_data->pda_speed_limit_rpm <= 0.0f || _motor_data->pda_speed_limit_rpm > _spec.rated_speed_rpm)
+    {
+        _motor_data->pda_speed_limit_rpm = _spec.rated_speed_rpm;
+    }
+
+    if (!_has_valid_pda_id() || !_pda_id_is_unique())
+    {
+        _error = true;
+        _motor_data->enabled = false;
+        _enable_response = false;
+    }
+
+    #ifdef MOTOR_DEBUG
+        logger::print("PdaMotor::PdaMotor : PDA id ");
+        logger::println(_pda_id);
+    #endif
+}
+
+uint16_t PdaMotor::_frame_id(uint8_t cmd_id) const
+{
+    return ((uint16_t)_pda_id << 5) + cmd_id;
+}
+
+bool PdaMotor::_has_valid_pda_id() const
+{
+    return (_pda_id >= 1) && (_pda_id <= 63);
+}
+
+bool PdaMotor::_is_pda_motor_type(uint8_t motor_type) const
+{
+    return (motor_type == (uint8_t)config_defs::motor::PDA08) ||
+           (motor_type == (uint8_t)config_defs::motor::PDA01);
+}
+
+bool PdaMotor::_pda_id_is_unique() const
+{
+    JointData* joints[] = {
+        &_data->left_side.hip,
+        &_data->left_side.knee,
+        &_data->left_side.ankle,
+        &_data->left_side.elbow,
+        &_data->left_side.arm_1,
+        &_data->left_side.arm_2,
+        &_data->right_side.hip,
+        &_data->right_side.knee,
+        &_data->right_side.ankle,
+        &_data->right_side.elbow,
+        &_data->right_side.arm_1,
+        &_data->right_side.arm_2
+    };
+
+    for (uint8_t idx = 0; idx < 12; idx++)
+    {
+        if ((&joints[idx]->motor != _motor_data) &&
+            joints[idx]->is_used &&
+            _is_pda_motor_type(joints[idx]->motor.motor_type) &&
+            (joints[idx]->motor.pda_id == _pda_id))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+void PdaMotor::_encode_float32_le(float val, uint8_t* data)
+{
+    memcpy(data, &val, sizeof(float));
+}
+
+void PdaMotor::_encode_uint32_le(uint32_t val, uint8_t* data)
+{
+    data[0] = (uint8_t)(val);
+    data[1] = (uint8_t)(val >> 8);
+    data[2] = (uint8_t)(val >> 16);
+    data[3] = (uint8_t)(val >> 24);
+}
+
+void PdaMotor::_encode_uint16_le(uint16_t val, uint8_t* data)
+{
+    data[0] = (uint8_t)(val);
+    data[1] = (uint8_t)(val >> 8);
+}
+
+void PdaMotor::_encode_int16_le(int16_t val, uint8_t* data)
+{
+    data[0] = (uint8_t)(val);
+    data[1] = (uint8_t)(val >> 8);
+}
+
+float PdaMotor::_decode_float32_le(const uint8_t* data)
+{
+    float val = 0.0f;
+    memcpy(&val, data, sizeof(float));
+    return val;
+}
+
+int16_t PdaMotor::_decode_int16_le(const uint8_t* data)
+{
+    return (int16_t)(((uint16_t)data[1] << 8) | data[0]);
+}
+
+int16_t PdaMotor::_scale_to_int16(float value, float scale) const
+{
+    int32_t scaled = (int32_t)(value / scale);
+    if (scaled > 32767)
+    {
+        return 32767;
+    }
+    if (scaled < -32768)
+    {
+        return -32768;
+    }
+    return (int16_t)scaled;
+}
+
+uint16_t PdaMotor::_scale_to_uint16(float value, float scale) const
+{
+    int32_t scaled = (int32_t)(value / scale);
+    if (scaled > 65535)
+    {
+        return 65535;
+    }
+    if (scaled < 0)
+    {
+        return 0;
+    }
+    return (uint16_t)scaled;
+}
+
+float PdaMotor::_apply_torque_limit(float torque_nm) const
+{
+    return constrain(torque_nm, -_motor_data->pda_torque_limit_nm, _motor_data->pda_torque_limit_nm);
+}
+
+float PdaMotor::_apply_speed_limit(float speed_rpm) const
+{
+    return constrain(speed_rpm, -_motor_data->pda_speed_limit_rpm, _motor_data->pda_speed_limit_rpm);
+}
+
+void PdaMotor::transaction(float torque)
+{
+    read_data();
+    _handle_timeout();
+    send_data(torque);
+}
+
+void PdaMotor::read_data()
+{
+    CAN* can = CAN::getInstance();
+    CAN_message_t msg;
+
+    if (!can->read(msg))
+    {
+        return;
+    }
+
+    _decode_any_pda_feedback(msg);
+}
+
+bool PdaMotor::_is_feedback_frame(const CAN_message_t& msg) const
+{
+    if (msg.flags.extended || msg.len < 8)
+    {
+        return false;
+    }
+
+    const uint8_t pda_id = (uint8_t)((msg.id & 0x07E0) >> 5);
+    return pda_id == _pda_id;
+}
+
+void PdaMotor::_decode_feedback(const CAN_message_t& msg)
+{
+    _decode_feedback(_motor_data, msg);
+}
+
+void PdaMotor::_decode_feedback(MotorData* motor_data, const CAN_message_t& msg)
+{
+    if (motor_data == NULL)
+    {
+        return;
+    }
+
+    const int direction_modifier = motor_data->flip_direction ? -1 : 1;
+    const float angle_deg = direction_modifier * _decode_float32_le(&msg.buf[0]);
+    const float speed_rpm = direction_modifier * (_decode_int16_le(&msg.buf[4]) * 0.01f);
+    const float torque_nm = direction_modifier * (_decode_int16_le(&msg.buf[6]) * 0.01f);
+
+    motor_data->pda_angle_deg = angle_deg;
+    motor_data->pda_speed_rpm = speed_rpm;
+    motor_data->pda_torque_nm = torque_nm;
+
+    motor_data->p = angle_deg * PI / 180.0f;
+    motor_data->v = speed_rpm * 2.0f * PI / 60.0f;
+    motor_data->i = torque_nm;
+
+    motor_data->pda_last_feedback_us = micros();
+    motor_data->pda_feedback_valid = true;
+    motor_data->timeout_count = 0;
+}
+
+bool PdaMotor::_decode_any_pda_feedback(const CAN_message_t& msg)
+{
+    if (msg.flags.extended || msg.len < 8)
+    {
+        return false;
+    }
+
+    const uint8_t pda_id = (uint8_t)((msg.id & 0x07E0) >> 5);
+    MotorData* target_motor_data = _get_pda_motor_data_by_pda_id(pda_id);
+    if (target_motor_data == NULL)
+    {
+        return false;
+    }
+
+    _decode_feedback(target_motor_data, msg);
+    return true;
+}
+
+MotorData* PdaMotor::_get_pda_motor_data_by_pda_id(uint8_t pda_id) const
+{
+    JointData* joints[] = {
+        &_data->left_side.hip,
+        &_data->left_side.knee,
+        &_data->left_side.ankle,
+        &_data->left_side.elbow,
+        &_data->left_side.arm_1,
+        &_data->left_side.arm_2,
+        &_data->right_side.hip,
+        &_data->right_side.knee,
+        &_data->right_side.ankle,
+        &_data->right_side.elbow,
+        &_data->right_side.arm_1,
+        &_data->right_side.arm_2
+    };
+
+    for (uint8_t idx = 0; idx < 12; idx++)
+    {
+        if (joints[idx]->is_used &&
+            _is_pda_motor_type(joints[idx]->motor.motor_type) &&
+            (joints[idx]->motor.pda_id == pda_id))
+        {
+            return &joints[idx]->motor;
+        }
+    }
+    return NULL;
+}
+
+void PdaMotor::send_data(float torque)
+{
+    send_torque_direct_nm(torque);
+}
+
+bool PdaMotor::_can_send_motion_command()
+{
+    if (!_motor_data->enabled || !_motor_data->is_on || _data->estop || _error || (_motor_data->timeout_count > 0))
+    {
+        _send_zero_torque();
+        return false;
+    }
+    return true;
+}
+
+void PdaMotor::_send_command(uint8_t cmd_id, const uint8_t* data)
+{
+    if (!_has_valid_pda_id())
+    {
+        return;
+    }
+
+    CAN_message_t msg;
+    msg.flags.extended = 0;
+    msg.id = _frame_id(cmd_id);
+    msg.len = 8;
+
+    for (uint8_t idx = 0; idx < 8; idx++)
+    {
+        msg.buf[idx] = data[idx];
+    }
+
+    CAN* can = CAN::getInstance();
+    can->send(msg);
+}
+
+void PdaMotor::_send_torque_command(float torque_nm, uint16_t input_mode, int16_t ramp_rate)
+{
+    uint8_t data[8];
+    _encode_float32_le(torque_nm, &data[0]);
+    _encode_int16_le(ramp_rate, &data[4]);
+    _encode_uint16_le(input_mode, &data[6]);
+    _send_command(pda_cmd::SET_TORQUE, data);
+}
+
+void PdaMotor::_send_zero_torque()
+{
+    _send_torque_command(0.0f, pda_cmd::INPUT_MODE_PASSTHROUGH, 0);
+}
+
+bool PdaMotor::send_torque_direct_nm(float torque_nm)
+{
+    const int direction_modifier = _motor_data->flip_direction ? -1 : 1;
+    const float motor_torque_nm = _apply_torque_limit(direction_modifier * torque_nm);
+    _motor_data->t_ff = motor_torque_nm;
+    _motor_data->last_command = motor_torque_nm;
+
+    if (!_can_send_motion_command())
+    {
+        return false;
+    }
+
+    _send_torque_command(motor_torque_nm, pda_cmd::INPUT_MODE_PASSTHROUGH, 0);
+    return true;
+}
+
+bool PdaMotor::send_torque_ramp_nm_s(float torque_nm, float ramp_nm_s)
+{
+    const int direction_modifier = _motor_data->flip_direction ? -1 : 1;
+    const float motor_torque_nm = _apply_torque_limit(direction_modifier * torque_nm);
+    const int16_t ramp_rate = _scale_to_int16(fabs(ramp_nm_s), 0.01f);
+    _motor_data->t_ff = motor_torque_nm;
+    _motor_data->last_command = motor_torque_nm;
+
+    if (!_can_send_motion_command())
+    {
+        return false;
+    }
+
+    _send_torque_command(motor_torque_nm, pda_cmd::INPUT_MODE_TORQUE_RAMP, ramp_rate);
+    return true;
+}
+
+bool PdaMotor::send_speed_rpm(float speed_rpm, float param, uint8_t mode)
+{
+    const int direction_modifier = _motor_data->flip_direction ? -1 : 1;
+    const float motor_speed_rpm = _apply_speed_limit(direction_modifier * speed_rpm);
+    uint8_t data[8];
+    _encode_float32_le(motor_speed_rpm, &data[0]);
+
+    if (mode == 0)
+    {
+        const float torque_ff_nm = _apply_torque_limit(direction_modifier * param);
+        _encode_int16_le(_scale_to_int16(torque_ff_nm, 0.01f), &data[4]);
+        _encode_uint16_le(pda_cmd::INPUT_MODE_PASSTHROUGH, &data[6]);
+    }
+    else
+    {
+        _encode_int16_le(_scale_to_int16(fabs(param), 0.01f), &data[4]);
+        _encode_uint16_le(pda_cmd::INPUT_MODE_VEL_RAMP, &data[6]);
+    }
+
+    if (!_can_send_motion_command())
+    {
+        return false;
+    }
+
+    _send_command(pda_cmd::SET_SPEED, data);
+    return true;
+}
+
+bool PdaMotor::send_position_deg(float angle_deg, float speed_rpm, float param, uint8_t mode)
+{
+    const int direction_modifier = _motor_data->flip_direction ? -1 : 1;
+    const float motor_angle_deg = direction_modifier * angle_deg;
+    uint8_t data[8];
+    _encode_float32_le(motor_angle_deg, &data[0]);
+
+    if (mode == 0)
+    {
+        const float speed_limit_rpm = fabs(_apply_speed_limit(speed_rpm));
+        const float width_hz = constrain(fabs(param), 0.0f, 300.0f);
+        _encode_int16_le(_scale_to_int16(speed_limit_rpm, 0.01f), &data[4]);
+        _encode_int16_le(_scale_to_int16(width_hz, 0.01f), &data[6]);
+        if (!_can_send_motion_command()) { return false; }
+        _send_command(pda_cmd::SET_POSITION_TRACK, data);
+        return true;
+    }
+
+    if (mode == 1)
+    {
+        const float speed_limit_rpm = fabs(_apply_speed_limit(speed_rpm));
+        const float accel_rpm_s = fabs(param);
+        if (speed_limit_rpm <= 0.0f || accel_rpm_s <= 0.0f)
+        {
+            return false;
+        }
+        _encode_int16_le(_scale_to_int16(speed_limit_rpm, 0.01f), &data[4]);
+        _encode_int16_le(_scale_to_int16(accel_rpm_s, 0.01f), &data[6]);
+        if (!_can_send_motion_command()) { return false; }
+        _send_command(pda_cmd::SET_POSITION_TRAPEZOID, data);
+        return true;
+    }
+
+    const float motor_speed_ff_rpm = _apply_speed_limit(direction_modifier * speed_rpm);
+    const float motor_torque_ff_nm = _apply_torque_limit(direction_modifier * param);
+    _encode_int16_le(_scale_to_int16(motor_speed_ff_rpm, 0.01f), &data[4]);
+    _encode_int16_le(_scale_to_int16(motor_torque_ff_nm, 0.01f), &data[6]);
+    if (!_can_send_motion_command()) { return false; }
+    _send_command(pda_cmd::SET_POSITION_FF, data);
+    return true;
+}
+
+bool PdaMotor::send_adaptive_position_deg(float angle_deg, float speed_rpm, float torque_limit_nm)
+{
+    const int direction_modifier = _motor_data->flip_direction ? -1 : 1;
+    const float motor_angle_deg = direction_modifier * angle_deg;
+    const float speed_limit_rpm = fabs(_apply_speed_limit(speed_rpm));
+    const float torque_limit = fabs(_apply_torque_limit(torque_limit_nm));
+
+    uint8_t data[8];
+    _encode_float32_le(motor_angle_deg, &data[0]);
+    _encode_int16_le(_scale_to_int16(speed_limit_rpm, 0.01f), &data[4]);
+    _encode_int16_le(_scale_to_int16(torque_limit, 0.01f), &data[6]);
+
+    if (!_can_send_motion_command())
+    {
+        return false;
+    }
+
+    _send_command(pda_cmd::ADAPTIVE_POSITION, data);
+    return true;
+}
+
+bool PdaMotor::send_impedance_deg_rpm_nm(float angle_deg, float speed_rpm, float tff_nm, float kp_nm_per_deg, float kd_nm_per_rpm, uint8_t mode)
+{
+    float kp = fabs(kp_nm_per_deg);
+    float kd = fabs(kd_nm_per_rpm);
+    kp = constrain(kp, 0.0f, 20.0f);
+    kd = constrain(kd, 0.0f, 20.0f);
+
+    float angle_set_deg = angle_deg;
+    if (mode == 1)
+    {
+        if (kp <= 0.0f)
+        {
+            return false;
+        }
+        angle_set_deg = (-kd * speed_rpm - tff_nm) / kp + angle_deg;
+    }
+
+    if (!send_position_deg(angle_set_deg, speed_rpm, tff_nm, 2))
+    {
+        return false;
+    }
+
+    uint8_t data[8];
+    _encode_uint32_le(0x15, &data[0]);
+    _encode_int16_le(_scale_to_int16(kp, 0.001f), &data[4]);
+    _encode_int16_le(_scale_to_int16(kd, 0.001f), &data[6]);
+    _send_command(pda_cmd::SYSTEM, data);
+    return true;
+}
+
+bool PdaMotor::send_motion_aid(float angle_deg, float speed_rpm, float angle_err_deg, float speed_err_rpm, float torque_nm)
+{
+    if (angle_deg < -300.0f || angle_deg > 300.0f)
+    {
+        return false;
+    }
+
+    const int direction_modifier = _motor_data->flip_direction ? -1 : 1;
+    const float motor_angle_deg = direction_modifier * angle_deg;
+    const float motor_torque_nm = _apply_torque_limit(direction_modifier * torque_nm);
+    const float speed_limit_rpm = fabs(_apply_speed_limit(speed_rpm));
+    const float angle_err = fabs(angle_err_deg);
+    const float speed_err = fabs(speed_err_rpm);
+
+    uint8_t data[8];
+    _encode_int16_le(_scale_to_int16(motor_angle_deg, 0.01f), &data[0]);
+    _encode_uint16_le(_scale_to_uint16(angle_err, 0.01f), &data[2]);
+    _encode_uint16_le(_scale_to_uint16(speed_err, 0.01f), &data[4]);
+    _encode_int16_le(_scale_to_int16(motor_torque_nm, 0.01f), &data[6]);
+
+    if (!_can_send_motion_command())
+    {
+        return false;
+    }
+
+    _send_command(pda_cmd::MOTION_AID, data);
+
+    uint8_t preset_data[8];
+    _encode_float32_le(speed_limit_rpm, &preset_data[0]);
+    _encode_int16_le(0, &preset_data[4]);
+    _encode_int16_le(0, &preset_data[6]);
+    _send_command(pda_cmd::PRESET, preset_data);
+
+    uint8_t system_data[8];
+    _encode_uint32_le(0x20, &system_data[0]);
+    _encode_uint16_le(0, &system_data[4]);
+    _encode_uint16_le(0, &system_data[6]);
+    _send_command(pda_cmd::SYSTEM, system_data);
+    return true;
+}
+
+void PdaMotor::on_off()
+{
+    if (_data->estop || _error)
+    {
+        _motor_data->is_on = false;
+    }
+
+    if (_prev_on_state != _motor_data->is_on)
+    {
+        if (_motor_data->is_on)
+        {
+            digitalWrite(_enable_pin, logic_micro_pins::motor_enable_on_state);
+        }
+        else
+        {
+            _send_zero_torque();
+            digitalWrite(_enable_pin, logic_micro_pins::motor_enable_off_state);
+        }
+    }
+
+    _prev_on_state = _motor_data->is_on;
+}
+
+bool PdaMotor::enable()
+{
+    return enable(false);
+}
+
+bool PdaMotor::enable(bool overide)
+{
+    if (_data->estop || _error)
+    {
+        _motor_data->enabled = false;
+    }
+
+    if ((_prev_motor_enabled != _motor_data->enabled) || overide || !_feedback_configured)
+    {
+        if (_motor_data->enabled && _motor_data->is_on && !_error && !_data->estop)
+        {
+            _motor_data->pda_last_feedback_us = micros();
+            _motor_data->pda_feedback_valid = false;
+            _motor_data->timeout_count = 0;
+            _send_write_property_u32(31002, 3, pda_config::FEEDBACK_PERIOD_MS);
+            _send_write_property_u32(22001, 3, 1);
+            _send_write_property_u32(30003, 3, 2);
+            _feedback_configured = true;
+            _enable_response = true;
+        }
+        else
+        {
+            _send_zero_torque();
+            _send_write_property_u32(30003, 3, 1);
+            _enable_response = false;
+        }
+    }
+
+    _prev_motor_enabled = _motor_data->enabled;
+    return _enable_response;
+}
+
+void PdaMotor::_send_write_property_u32(uint16_t param_address, uint16_t param_type, uint32_t value)
+{
+    uint8_t data[8];
+    _encode_uint16_le(param_address, &data[0]);
+    _encode_uint16_le(param_type, &data[2]);
+    _encode_uint32_le(value, &data[4]);
+    _send_command(pda_cmd::WRITE_PROPERTY, data);
+}
+
+void PdaMotor::zero()
+{
+    _send_zero_torque();
+
+    uint8_t data[8];
+    _encode_uint32_le(0x23, &data[0]);
+    _encode_uint16_le(0, &data[4]);
+    _encode_uint16_le(0, &data[6]);
+    _send_command(pda_cmd::SYSTEM, data);
+}
+
+void PdaMotor::_handle_timeout()
+{
+    if (!_motor_data->enabled || _error)
+    {
+        return;
+    }
+
+    const uint32_t now_us = micros();
+    const bool timed_out = (now_us - _motor_data->pda_last_feedback_us) > pda_config::FEEDBACK_TIMEOUT_US;
+
+    if (timed_out)
+    {
+        _motor_data->timeout_count++;
+        _send_zero_torque();
+
+        if (_motor_data->timeout_count >= _motor_data->timeout_count_max)
+        {
+            _error = true;
+            _motor_data->enabled = false;
+        }
+    }
+}
+
+float PdaMotor::get_Kt()
+{
+    return _Kt;
+}
+
+void PdaMotor::set_error()
+{
+    _error = true;
+    _send_zero_torque();
+}
+
+Pda08Motor::Pda08Motor(config_defs::joint_id id, ExoData* exo_data, int enable_pin)
+: PdaMotor(id, exo_data, enable_pin, PDA08_SPEC)
+{
+}
+
+Pda01Motor::Pda01Motor(config_defs::joint_id id, ExoData* exo_data, int enable_pin)
+: PdaMotor(id, exo_data, enable_pin, PDA01_SPEC)
+{
+}
 
 /*
  * Constructor for the PWM (Maxon) Motor.  

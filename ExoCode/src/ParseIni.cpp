@@ -1,6 +1,8 @@
 #include "ParseIni.h"
+#include "Config.h"
 #include "Logger.h"
 #include <stdlib.h> 
+#include <string.h>
 
 //We only need to parse the INI file if we have access to the SD card.
 //The nano will get the info through SPI so doesn't need these functions.
@@ -45,6 +47,153 @@
             {
                 logger::print("\n");
             }
+        }
+    }
+
+    static bool is_pda_motor(uint8_t motor_type)
+    {
+        return (motor_type == (uint8_t)config_defs::motor::PDA08) ||
+               (motor_type == (uint8_t)config_defs::motor::PDA01);
+    }
+
+    static float pda_default_torque_limit_nm(uint8_t motor_type)
+    {
+        if (motor_type == (uint8_t)config_defs::motor::PDA01)
+        {
+            return pda_config::PDA01_RATED_TORQUE_NM;
+        }
+        if (motor_type == (uint8_t)config_defs::motor::PDA08)
+        {
+            return pda_config::PDA08_RATED_TORQUE_NM;
+        }
+        return 0.0f;
+    }
+
+    static float pda_default_speed_limit_rpm(uint8_t motor_type)
+    {
+        if (motor_type == (uint8_t)config_defs::motor::PDA01)
+        {
+            return pda_config::PDA01_RATED_SPEED_RPM;
+        }
+        if (motor_type == (uint8_t)config_defs::motor::PDA08)
+        {
+            return pda_config::PDA08_RATED_SPEED_RPM;
+        }
+        return 0.0f;
+    }
+
+    static bool get_section_key_optional(IniFile& ini, const char* section, const char* key, char* buffer, size_t buffer_len)
+    {
+        if (buffer_len > 0)
+        {
+            buffer[0] = '\0';
+        }
+        return ini.getValue(section, key, buffer, buffer_len);
+    }
+
+    static uint8_t clamp_u8(int value, int lower, int upper)
+    {
+        if (value < lower)
+        {
+            return (uint8_t)lower;
+        }
+        if (value > upper)
+        {
+            return (uint8_t)upper;
+        }
+        return (uint8_t)value;
+    }
+
+    static uint8_t encode_pda_torque_limit(float torque_limit_nm)
+    {
+        if (torque_limit_nm <= 0.0f)
+        {
+            return 0;
+        }
+        return clamp_u8((int)(torque_limit_nm * 10.0f + 0.5f), 1, 255);
+    }
+
+    static uint8_t encode_pda_speed_limit(float speed_limit_rpm)
+    {
+        if (speed_limit_rpm <= 0.0f)
+        {
+            return 0;
+        }
+        return clamp_u8((int)(speed_limit_rpm / 10.0f + 0.5f), 1, 255);
+    }
+
+    static uint8_t parse_pda_control_mode_or_default(const char* value)
+    {
+        if (value == NULL || value[0] == '\0')
+        {
+            return (uint8_t)config_defs::pda_control_mode::torque_direct;
+        }
+
+        config_map::IniKeyCode::const_iterator mode_it = config_map::pda_control_mode.find(value);
+        if (mode_it != config_map::pda_control_mode.end())
+        {
+            return mode_it->second;
+        }
+        return (uint8_t)config_defs::pda_control_mode::torque_direct;
+    }
+
+    static void set_pda_joint_config(
+        IniFile& ini,
+        char* buffer,
+        size_t buffer_len,
+        uint8_t* config_to_send,
+        const char* key_prefix,
+        int motor_idx,
+        int can_id_idx,
+        int torque_limit_idx,
+        int speed_limit_idx,
+        int control_mode_idx,
+        uint8_t default_can_id
+    )
+    {
+        char key[ini_config::key_length];
+        const uint8_t motor_type = config_to_send[motor_idx];
+        const bool joint_uses_pda = is_pda_motor(motor_type);
+        float default_torque_limit_nm = pda_default_torque_limit_nm(motor_type);
+        float default_speed_limit_rpm = pda_default_speed_limit_rpm(motor_type);
+
+        if (!joint_uses_pda)
+        {
+            default_torque_limit_nm = pda_config::PDA08_RATED_TORQUE_NM;
+            default_speed_limit_rpm = pda_config::PDA08_RATED_SPEED_RPM;
+        }
+
+        config_to_send[can_id_idx] = default_can_id;
+        config_to_send[torque_limit_idx] = encode_pda_torque_limit(default_torque_limit_nm);
+        config_to_send[speed_limit_idx] = encode_pda_speed_limit(default_speed_limit_rpm);
+        config_to_send[control_mode_idx] = (uint8_t)config_defs::pda_control_mode::torque_direct;
+
+        strcpy(key, key_prefix);
+        strcat(key, "PdaCanId");
+        if (get_section_key_optional(ini, "PDA", key, buffer, buffer_len) && buffer[0] != '\0')
+        {
+            config_to_send[can_id_idx] = clamp_u8(atoi(buffer), 1, 63);
+        }
+
+        strcpy(key, key_prefix);
+        strcat(key, "PdaTorqueLimitNm");
+        if (get_section_key_optional(ini, "PDA", key, buffer, buffer_len) && buffer[0] != '\0')
+        {
+            config_to_send[torque_limit_idx] = encode_pda_torque_limit(atof(buffer));
+        }
+
+        strcpy(key, key_prefix);
+        strcat(key, "PdaSpeedLimitRpm");
+        if (get_section_key_optional(ini, "PDA", key, buffer, buffer_len) && buffer[0] != '\0')
+        {
+            config_to_send[speed_limit_idx] = encode_pda_speed_limit(atof(buffer));
+        }
+
+        strcpy(key, key_prefix);
+        strcat(key, "PdaControlMode");
+        if (get_section_key_optional(ini, "PDA", key, buffer, buffer_len) && buffer[0] != '\0')
+        {
+            config_to_send[control_mode_idx] = parse_pda_control_mode_or_default(buffer);
         }
     }
 
@@ -541,6 +690,91 @@
         get_section_key(ini,"Exo","rightArm2TorqueOffset",buffer,buffer_len);
         data.right_arm_2_torque_offset = atof(buffer);
         config_to_send[config_defs::right_arm_2_torque_offset_idx] = data.right_arm_2_torque_offset;
+
+        set_pda_joint_config(ini, buffer, buffer_len, config_to_send, "leftHip",
+            config_defs::hip_idx,
+            config_defs::left_hip_pda_can_id_idx,
+            config_defs::left_hip_pda_torque_limit_idx,
+            config_defs::left_hip_pda_speed_limit_idx,
+            config_defs::left_hip_pda_control_mode_idx,
+            1);
+        set_pda_joint_config(ini, buffer, buffer_len, config_to_send, "rightHip",
+            config_defs::hip_idx,
+            config_defs::right_hip_pda_can_id_idx,
+            config_defs::right_hip_pda_torque_limit_idx,
+            config_defs::right_hip_pda_speed_limit_idx,
+            config_defs::right_hip_pda_control_mode_idx,
+            3);
+        set_pda_joint_config(ini, buffer, buffer_len, config_to_send, "leftKnee",
+            config_defs::knee_idx,
+            config_defs::left_knee_pda_can_id_idx,
+            config_defs::left_knee_pda_torque_limit_idx,
+            config_defs::left_knee_pda_speed_limit_idx,
+            config_defs::left_knee_pda_control_mode_idx,
+            2);
+        set_pda_joint_config(ini, buffer, buffer_len, config_to_send, "rightKnee",
+            config_defs::knee_idx,
+            config_defs::right_knee_pda_can_id_idx,
+            config_defs::right_knee_pda_torque_limit_idx,
+            config_defs::right_knee_pda_speed_limit_idx,
+            config_defs::right_knee_pda_control_mode_idx,
+            4);
+        set_pda_joint_config(ini, buffer, buffer_len, config_to_send, "leftAnkle",
+            config_defs::ankle_idx,
+            config_defs::left_ankle_pda_can_id_idx,
+            config_defs::left_ankle_pda_torque_limit_idx,
+            config_defs::left_ankle_pda_speed_limit_idx,
+            config_defs::left_ankle_pda_control_mode_idx,
+            5);
+        set_pda_joint_config(ini, buffer, buffer_len, config_to_send, "rightAnkle",
+            config_defs::ankle_idx,
+            config_defs::right_ankle_pda_can_id_idx,
+            config_defs::right_ankle_pda_torque_limit_idx,
+            config_defs::right_ankle_pda_speed_limit_idx,
+            config_defs::right_ankle_pda_control_mode_idx,
+            6);
+        set_pda_joint_config(ini, buffer, buffer_len, config_to_send, "leftElbow",
+            config_defs::elbow_idx,
+            config_defs::left_elbow_pda_can_id_idx,
+            config_defs::left_elbow_pda_torque_limit_idx,
+            config_defs::left_elbow_pda_speed_limit_idx,
+            config_defs::left_elbow_pda_control_mode_idx,
+            7);
+        set_pda_joint_config(ini, buffer, buffer_len, config_to_send, "rightElbow",
+            config_defs::elbow_idx,
+            config_defs::right_elbow_pda_can_id_idx,
+            config_defs::right_elbow_pda_torque_limit_idx,
+            config_defs::right_elbow_pda_speed_limit_idx,
+            config_defs::right_elbow_pda_control_mode_idx,
+            8);
+        set_pda_joint_config(ini, buffer, buffer_len, config_to_send, "leftArm1",
+            config_defs::arm_1_idx,
+            config_defs::left_arm_1_pda_can_id_idx,
+            config_defs::left_arm_1_pda_torque_limit_idx,
+            config_defs::left_arm_1_pda_speed_limit_idx,
+            config_defs::left_arm_1_pda_control_mode_idx,
+            9);
+        set_pda_joint_config(ini, buffer, buffer_len, config_to_send, "rightArm1",
+            config_defs::arm_1_idx,
+            config_defs::right_arm_1_pda_can_id_idx,
+            config_defs::right_arm_1_pda_torque_limit_idx,
+            config_defs::right_arm_1_pda_speed_limit_idx,
+            config_defs::right_arm_1_pda_control_mode_idx,
+            10);
+        set_pda_joint_config(ini, buffer, buffer_len, config_to_send, "leftArm2",
+            config_defs::arm_2_idx,
+            config_defs::left_arm_2_pda_can_id_idx,
+            config_defs::left_arm_2_pda_torque_limit_idx,
+            config_defs::left_arm_2_pda_speed_limit_idx,
+            config_defs::left_arm_2_pda_control_mode_idx,
+            11);
+        set_pda_joint_config(ini, buffer, buffer_len, config_to_send, "rightArm2",
+            config_defs::arm_2_idx,
+            config_defs::right_arm_2_pda_can_id_idx,
+            config_defs::right_arm_2_pda_torque_limit_idx,
+            config_defs::right_arm_2_pda_speed_limit_idx,
+            config_defs::right_arm_2_pda_control_mode_idx,
+            12);
     }
 
     /*

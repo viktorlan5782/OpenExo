@@ -20,9 +20,9 @@
 namespace ini_config
 {
     const int buffer_length = 500;  /**< Length of the buffer for reading the file. */
-    const int key_length = 25;      /**< Max length of the key name */
+    const int key_length = 40;      /**< Max length of the key name */
     const int section_length = 10;  /**< Max length of the section name */
-    const int number_of_keys = 71;  /**< Number of keys to be parsed. */
+    const int number_of_keys = 119; /**< Number of keys to be parsed. */
 }
 
 //Reading the ini file from the SD card; 1 is the lowest value to confirm that data is present for sending over SPI
@@ -104,10 +104,23 @@ namespace config_defs
         AK60v1_1 = 4,
         AK70 = 5,
 		MaxonMotor = 6,
-		NullMotor = 7,
+        NullMotor = 7,
         AK60v3 = 8,
         AK45_36 = 9,
         AK45_10 = 10,
+        PDA08 = 11,
+        PDA01 = 12,
+    };
+
+    enum class pda_control_mode : uint8_t
+    {
+        torque_direct = 1,
+        torque_ramp = 2,
+        speed = 3,
+        position = 4,
+        adaptive_position = 5,
+        impedance = 6,
+        motion_aid = 7,
     };
     
     enum class gearing : uint8_t            //Gearing ratio options
@@ -335,10 +348,62 @@ namespace config_defs
 	static const int right_ankle_torque_offset_idx = 64;
 	static const int left_elbow_torque_offset_idx = 65;
 	static const int right_elbow_torque_offset_idx = 66;
-    static const int left_arm_1_torque_offset_idx = 67;
+	static const int left_arm_1_torque_offset_idx = 67;
     static const int right_arm_1_torque_offset_idx = 68;
     static const int left_arm_2_torque_offset_idx = 69;
     static const int right_arm_2_torque_offset_idx = 70;
+
+    static const int left_hip_pda_can_id_idx = 71;
+    static const int right_hip_pda_can_id_idx = 72;
+    static const int left_knee_pda_can_id_idx = 73;
+    static const int right_knee_pda_can_id_idx = 74;
+    static const int left_ankle_pda_can_id_idx = 75;
+    static const int right_ankle_pda_can_id_idx = 76;
+    static const int left_elbow_pda_can_id_idx = 77;
+    static const int right_elbow_pda_can_id_idx = 78;
+    static const int left_arm_1_pda_can_id_idx = 79;
+    static const int right_arm_1_pda_can_id_idx = 80;
+    static const int left_arm_2_pda_can_id_idx = 81;
+    static const int right_arm_2_pda_can_id_idx = 82;
+
+    static const int left_hip_pda_torque_limit_idx = 83;     // encoded as Nm * 10
+    static const int right_hip_pda_torque_limit_idx = 84;
+    static const int left_knee_pda_torque_limit_idx = 85;
+    static const int right_knee_pda_torque_limit_idx = 86;
+    static const int left_ankle_pda_torque_limit_idx = 87;
+    static const int right_ankle_pda_torque_limit_idx = 88;
+    static const int left_elbow_pda_torque_limit_idx = 89;
+    static const int right_elbow_pda_torque_limit_idx = 90;
+    static const int left_arm_1_pda_torque_limit_idx = 91;
+    static const int right_arm_1_pda_torque_limit_idx = 92;
+    static const int left_arm_2_pda_torque_limit_idx = 93;
+    static const int right_arm_2_pda_torque_limit_idx = 94;
+
+    static const int left_hip_pda_speed_limit_idx = 95;      // encoded as rpm / 10
+    static const int right_hip_pda_speed_limit_idx = 96;
+    static const int left_knee_pda_speed_limit_idx = 97;
+    static const int right_knee_pda_speed_limit_idx = 98;
+    static const int left_ankle_pda_speed_limit_idx = 99;
+    static const int right_ankle_pda_speed_limit_idx = 100;
+    static const int left_elbow_pda_speed_limit_idx = 101;
+    static const int right_elbow_pda_speed_limit_idx = 102;
+    static const int left_arm_1_pda_speed_limit_idx = 103;
+    static const int right_arm_1_pda_speed_limit_idx = 104;
+    static const int left_arm_2_pda_speed_limit_idx = 105;
+    static const int right_arm_2_pda_speed_limit_idx = 106;
+
+    static const int left_hip_pda_control_mode_idx = 107;
+    static const int right_hip_pda_control_mode_idx = 108;
+    static const int left_knee_pda_control_mode_idx = 109;
+    static const int right_knee_pda_control_mode_idx = 110;
+    static const int left_ankle_pda_control_mode_idx = 111;
+    static const int right_ankle_pda_control_mode_idx = 112;
+    static const int left_elbow_pda_control_mode_idx = 113;
+    static const int right_elbow_pda_control_mode_idx = 114;
+    static const int left_arm_1_pda_control_mode_idx = 115;
+    static const int right_arm_1_pda_control_mode_idx = 116;
+    static const int left_arm_2_pda_control_mode_idx = 117;
+    static const int right_arm_2_pda_control_mode_idx = 118;
 }
 
 #if defined(ARDUINO_TEENSY36)  || defined(ARDUINO_TEENSY41) 
@@ -474,6 +539,23 @@ namespace config_defs
             {"AK60v3", (uint8_t)config_defs::motor::AK60v3},
             {"AK45_36", (uint8_t)config_defs::motor::AK45_36},
             {"AK45_10", (uint8_t)config_defs::motor::AK45_10},
+            {"PDA08", (uint8_t)config_defs::motor::PDA08},
+            {"PDA01", (uint8_t)config_defs::motor::PDA01},
+        };
+
+        const IniKeyCode pda_control_mode
+        {
+            {"torque_direct", (uint8_t)config_defs::pda_control_mode::torque_direct},
+            {"torqueDirect", (uint8_t)config_defs::pda_control_mode::torque_direct},
+            {"torque_ramp", (uint8_t)config_defs::pda_control_mode::torque_ramp},
+            {"torqueRamp", (uint8_t)config_defs::pda_control_mode::torque_ramp},
+            {"speed", (uint8_t)config_defs::pda_control_mode::speed},
+            {"position", (uint8_t)config_defs::pda_control_mode::position},
+            {"adaptive_position", (uint8_t)config_defs::pda_control_mode::adaptive_position},
+            {"adaptivePosition", (uint8_t)config_defs::pda_control_mode::adaptive_position},
+            {"impedance", (uint8_t)config_defs::pda_control_mode::impedance},
+            {"motion_aid", (uint8_t)config_defs::pda_control_mode::motion_aid},
+            {"motionAid", (uint8_t)config_defs::pda_control_mode::motion_aid},
         };
         
         const IniKeyCode gearing 

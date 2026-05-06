@@ -98,6 +98,12 @@ UART_msg_t UARTHandler::poll(float timeout_us)
       //Add the partial data to the message
       if (_partial_packet_len) 
       {
+        if ((uint16_t)_recv_len + _partial_packet_len > MAX_RX_LEN)
+        {
+          _reset_partial_packet();
+          return empty_msg;
+        }
+
         //This occurs if there was a timeout during _recv_packet and we have a complete message
         #if DEBUG_UART_HANDLER
             logger::println("UARTHandler::poll->_recv_len > 0 && _partial_packet_len");
@@ -187,7 +193,7 @@ void UARTHandler::_pack(uint8_t msg_id, uint8_t len, uint8_t joint_id, float *da
     }
 }
 
-UART_msg_t UARTHandler::_unpack(uint8_t* data, uint8_t len)
+UART_msg_t UARTHandler::_unpack(uint8_t* data, uint16_t len)
 {
     UART_msg_t msg;
     msg.command = data[COMMAND];
@@ -295,7 +301,7 @@ void UARTHandler::_send_packet(uint8_t* p, uint8_t len)
            be truncated.
            Returns the number of bytes stored in the buffer.
 */
-int UARTHandler::_recv_packet(uint8_t *p, uint8_t len)
+int UARTHandler::_recv_packet(uint8_t *p, uint16_t len)
 {
   uint8_t c;
   int received = 0;
@@ -394,8 +400,10 @@ int UARTHandler::_recv_packet(uint8_t *p, uint8_t len)
   }
 
  //There was a timeout before a full message was recieved, save the data to be reconstructed later
-  int prior_packet_len = _partial_packet_len;
-  _partial_packet_len += received;
+  const uint16_t prior_packet_len = _partial_packet_len;
+  const uint16_t space_left = (prior_packet_len < MAX_RX_LEN) ? (MAX_RX_LEN - prior_packet_len) : 0;
+  const uint16_t bytes_to_save = (received < space_left) ? received : space_left;
+  _partial_packet_len = prior_packet_len + bytes_to_save;
 
   #if DEBUG_UART_HANDLER
       logger::println("UARTHandler::_recv_packet->Timeout!");
@@ -406,11 +414,14 @@ int UARTHandler::_recv_packet(uint8_t *p, uint8_t len)
       logger::print("Received: ");
       logger::print(received);
       logger::print("\t");
+      logger::print("Saved: ");
+      logger::print(bytes_to_save);
+      logger::print("\t");
       logger::print("Partial Packet Length: ");
       logger::println(_partial_packet_len);
   #endif
 
-  for (int i=0; i<(_partial_packet_len); i++)
+  for (uint16_t i=0; i<bytes_to_save; i++)
   {
     _partial_packet[i+prior_packet_len] = p[i];
 

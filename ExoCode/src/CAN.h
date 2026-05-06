@@ -65,6 +65,17 @@ class CAN
             return msg;
         }
 
+        /**
+         * @brief Try to read a CAN message without hiding whether a frame was received.
+         *
+         * @param msg CAN_message_t updated when a frame is available.
+         * @return true if a frame was read, false otherwise.
+         */
+        bool read(CAN_message_t& msg)
+        {
+            return Can0.read(msg);
+        }
+
     private:
         /**
          * @brief Construct a new CAN object and initialize the CAN bus. This is private 

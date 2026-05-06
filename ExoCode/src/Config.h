@@ -78,6 +78,25 @@
         const float TRQ_V_TO_NM = 53.70;        //Conversion from voltage to Nm (Negative do to mismatch in torque sensor and motor torque directions) S12:(Left) = 39.8, S05 (Right) = 44.6; (These will be sensor specific).
     }
 
+    namespace pda_config
+    {
+        const uint32_t CAN_BAUD = 1000000;              // bit/s
+        const float PDA08_RATED_TORQUE_NM = 8.0f;       // Nm
+        const float PDA08_PEAK_TORQUE_NM = 24.0f;       // Nm
+        const float PDA08_RATED_SPEED_RPM = 200.0f;     // rpm
+        const float PDA08_RATED_CURRENT_A = 5.0f;       // A
+        const float PDA08_STALL_CURRENT_A = 15.5f;      // A
+        const float PDA08_ROTOR_INERTIA_GCM2 = 0.0f;    // g*cm^2, not specified in the PDA08 files found
+        const float PDA01_RATED_TORQUE_NM = 1.0f;       // Nm
+        const float PDA01_PEAK_TORQUE_NM = 3.0f;        // Nm
+        const float PDA01_RATED_SPEED_RPM = 524.0f;     // rpm
+        const float PDA01_RATED_CURRENT_A = 2.0f;       // A
+        const float PDA01_STALL_CURRENT_A = 5.0f;       // A
+        const float PDA01_ROTOR_INERTIA_GCM2 = 4.92f;   // g*cm^2
+        const uint32_t FEEDBACK_PERIOD_MS = 10;         // ms, 100 Hz for phase-1 single-joint tests
+        const uint32_t FEEDBACK_TIMEOUT_US = 30000;     // us, 3 missed 10 ms feedback periods
+    }
+
     namespace BLE_times
     {
         const float _status_msg_delay = 2000000;    //Microseconds

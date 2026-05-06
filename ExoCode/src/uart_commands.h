@@ -206,53 +206,10 @@ namespace UART_command_handlers
         tx_msg.command = UART_command_names::update_config;
         tx_msg.joint_id = 0;
         tx_msg.len = ini_config::number_of_keys;
-        tx_msg.data[config_defs::board_name_idx] = exo_data->config[config_defs::board_name_idx];
-        tx_msg.data[config_defs::battery_idx] = exo_data->config[config_defs::battery_idx];
-        tx_msg.data[config_defs::board_version_idx] = exo_data->config[config_defs::board_version_idx];
-        tx_msg.data[config_defs::exo_name_idx] = exo_data->config[config_defs::exo_name_idx];
-        tx_msg.data[config_defs::exo_side_idx] = exo_data->config[config_defs::exo_side_idx];
-        tx_msg.data[config_defs::hip_idx] = exo_data->config[config_defs::hip_idx];
-        tx_msg.data[config_defs::knee_idx] = exo_data->config[config_defs::knee_idx];
-        tx_msg.data[config_defs::ankle_idx] = exo_data->config[config_defs::ankle_idx];
-        tx_msg.data[config_defs::elbow_idx] = exo_data->config[config_defs::elbow_idx];
-        tx_msg.data[config_defs::arm_1_idx] = exo_data->config[config_defs::arm_1_idx];
-        tx_msg.data[config_defs::arm_2_idx] = exo_data->config[config_defs::arm_2_idx];
-        tx_msg.data[config_defs::hip_gear_idx] = exo_data->config[config_defs::hip_gear_idx];
-        tx_msg.data[config_defs::knee_gear_idx] = exo_data->config[config_defs::knee_gear_idx];
-        tx_msg.data[config_defs::ankle_gear_idx] = exo_data->config[config_defs::ankle_gear_idx];
-        tx_msg.data[config_defs::elbow_gear_idx] = exo_data->config[config_defs::elbow_gear_idx];
-        tx_msg.data[config_defs::arm_1_gear_idx] = exo_data->config[config_defs::arm_1_gear_idx];
-        tx_msg.data[config_defs::arm_2_gear_idx] = exo_data->config[config_defs::arm_2_gear_idx];
-        tx_msg.data[config_defs::exo_hip_default_controller_idx] = exo_data->config[config_defs::exo_hip_default_controller_idx];
-        tx_msg.data[config_defs::exo_knee_default_controller_idx] = exo_data->config[config_defs::exo_knee_default_controller_idx];
-        tx_msg.data[config_defs::exo_ankle_default_controller_idx] = exo_data->config[config_defs::exo_ankle_default_controller_idx];
-        tx_msg.data[config_defs::exo_elbow_default_controller_idx] = exo_data->config[config_defs::exo_elbow_default_controller_idx];
-        tx_msg.data[config_defs::exo_arm_1_default_controller_idx] = exo_data->config[config_defs::exo_arm_1_default_controller_idx];
-        tx_msg.data[config_defs::exo_arm_2_default_controller_idx] = exo_data->config[config_defs::exo_arm_2_default_controller_idx];
-        tx_msg.data[config_defs::hip_use_torque_sensor_idx] = exo_data->config[config_defs::hip_use_torque_sensor_idx];
-        tx_msg.data[config_defs::knee_use_torque_sensor_idx] = exo_data->config[config_defs::knee_use_torque_sensor_idx];
-        tx_msg.data[config_defs::ankle_use_torque_sensor_idx] = exo_data->config[config_defs::ankle_use_torque_sensor_idx];
-        tx_msg.data[config_defs::elbow_use_torque_sensor_idx] = exo_data->config[config_defs::elbow_use_torque_sensor_idx];
-        tx_msg.data[config_defs::arm_1_use_torque_sensor_idx] = exo_data->config[config_defs::arm_1_use_torque_sensor_idx];
-        tx_msg.data[config_defs::arm_2_use_torque_sensor_idx] = exo_data->config[config_defs::arm_2_use_torque_sensor_idx];
-        tx_msg.data[config_defs::hip_flip_motor_dir_idx] = exo_data->config[config_defs::hip_flip_motor_dir_idx];
-        tx_msg.data[config_defs::knee_flip_motor_dir_idx] = exo_data->config[config_defs::knee_flip_motor_dir_idx];
-        tx_msg.data[config_defs::ankle_flip_motor_dir_idx] = exo_data->config[config_defs::ankle_flip_motor_dir_idx];
-        tx_msg.data[config_defs::elbow_flip_motor_dir_idx] = exo_data->config[config_defs::elbow_flip_motor_dir_idx];
-        tx_msg.data[config_defs::arm_1_flip_motor_dir_idx] = exo_data->config[config_defs::arm_1_flip_motor_dir_idx];
-        tx_msg.data[config_defs::arm_2_flip_motor_dir_idx] = exo_data->config[config_defs::arm_2_flip_motor_dir_idx];
-        tx_msg.data[config_defs::hip_flip_torque_dir_idx] = exo_data->config[config_defs::hip_flip_torque_dir_idx];
-        tx_msg.data[config_defs::knee_flip_torque_dir_idx] = exo_data->config[config_defs::knee_flip_torque_dir_idx];
-        tx_msg.data[config_defs::ankle_flip_torque_dir_idx] = exo_data->config[config_defs::ankle_flip_torque_dir_idx];
-        tx_msg.data[config_defs::elbow_flip_torque_dir_idx] = exo_data->config[config_defs::elbow_flip_torque_dir_idx];
-        tx_msg.data[config_defs::arm_1_flip_torque_dir_idx] = exo_data->config[config_defs::arm_1_flip_torque_dir_idx];
-        tx_msg.data[config_defs::arm_2_flip_torque_dir_idx] = exo_data->config[config_defs::arm_2_flip_torque_dir_idx];
-        tx_msg.data[config_defs::hip_flip_angle_dir_idx] = exo_data->config[config_defs::hip_flip_angle_dir_idx];
-        tx_msg.data[config_defs::knee_flip_angle_dir_idx] = exo_data->config[config_defs::knee_flip_angle_dir_idx];
-        tx_msg.data[config_defs::ankle_flip_angle_dir_idx] = exo_data->config[config_defs::ankle_flip_angle_dir_idx];
-        tx_msg.data[config_defs::elbow_flip_angle_dir_idx] = exo_data->config[config_defs::elbow_flip_angle_dir_idx];
-        tx_msg.data[config_defs::arm_1_flip_angle_dir_idx] = exo_data->config[config_defs::arm_1_flip_angle_dir_idx];
-        tx_msg.data[config_defs::arm_2_flip_angle_dir_idx] = exo_data->config[config_defs::arm_2_flip_angle_dir_idx];
+        for (uint8_t idx = 0; idx < ini_config::number_of_keys; idx++)
+        {
+            tx_msg.data[idx] = exo_data->config[idx];
+        }
 
         handler->UART_msg(tx_msg);
         // logger::println("UART_command_handlers::get_config->sent updated config");
@@ -261,53 +218,11 @@ namespace UART_command_handlers
     {
         // logger::println("UART_command_handlers::update_config->got message: ");
         UART_msg_t_utils::print_msg(msg);
-        exo_data->config[config_defs::board_name_idx] = msg.data[config_defs::board_name_idx];
-        exo_data->config[config_defs::battery_idx] = msg.data[config_defs::battery_idx];
-        exo_data->config[config_defs::board_version_idx] = msg.data[config_defs::board_version_idx];
-        exo_data->config[config_defs::exo_name_idx] = msg.data[config_defs::exo_name_idx];
-        exo_data->config[config_defs::exo_side_idx] = msg.data[config_defs::exo_side_idx];
-        exo_data->config[config_defs::hip_idx] = msg.data[config_defs::hip_idx];
-        exo_data->config[config_defs::knee_idx] = msg.data[config_defs::knee_idx];
-        exo_data->config[config_defs::ankle_idx] = msg.data[config_defs::ankle_idx];
-        exo_data->config[config_defs::elbow_idx] = msg.data[config_defs::elbow_idx];
-        exo_data->config[config_defs::arm_1_idx] = msg.data[config_defs::arm_1_idx];
-        exo_data->config[config_defs::arm_2_idx] = msg.data[config_defs::arm_2_idx];
-        exo_data->config[config_defs::hip_gear_idx] = msg.data[config_defs::hip_gear_idx];
-        exo_data->config[config_defs::knee_gear_idx] = msg.data[config_defs::knee_gear_idx];
-        exo_data->config[config_defs::ankle_gear_idx] = msg.data[config_defs::ankle_gear_idx];
-        exo_data->config[config_defs::elbow_gear_idx] = msg.data[config_defs::elbow_gear_idx];
-        exo_data->config[config_defs::arm_1_gear_idx] = msg.data[config_defs::arm_1_gear_idx];
-        exo_data->config[config_defs::arm_2_gear_idx] = msg.data[config_defs::arm_2_gear_idx];
-        exo_data->config[config_defs::exo_hip_default_controller_idx] = msg.data[config_defs::exo_hip_default_controller_idx];
-        exo_data->config[config_defs::exo_knee_default_controller_idx] = msg.data[config_defs::exo_knee_default_controller_idx];
-        exo_data->config[config_defs::exo_ankle_default_controller_idx] = msg.data[config_defs::exo_ankle_default_controller_idx];
-        exo_data->config[config_defs::exo_elbow_default_controller_idx] = msg.data[config_defs::exo_elbow_default_controller_idx];
-        exo_data->config[config_defs::exo_arm_1_default_controller_idx] = msg.data[config_defs::exo_arm_1_default_controller_idx];
-        exo_data->config[config_defs::exo_arm_2_default_controller_idx] = msg.data[config_defs::exo_arm_2_default_controller_idx];
-        exo_data->config[config_defs::hip_use_torque_sensor_idx] = msg.data[config_defs::hip_use_torque_sensor_idx];
-        exo_data->config[config_defs::knee_use_torque_sensor_idx] = msg.data[config_defs::knee_use_torque_sensor_idx];
-        exo_data->config[config_defs::ankle_use_torque_sensor_idx] = msg.data[config_defs::ankle_use_torque_sensor_idx];
-        exo_data->config[config_defs::elbow_use_torque_sensor_idx] = msg.data[config_defs::elbow_use_torque_sensor_idx];
-        exo_data->config[config_defs::arm_1_use_torque_sensor_idx] = msg.data[config_defs::arm_1_use_torque_sensor_idx];
-        exo_data->config[config_defs::arm_2_use_torque_sensor_idx] = msg.data[config_defs::arm_2_use_torque_sensor_idx];
-        exo_data->config[config_defs::hip_flip_motor_dir_idx] = msg.data[config_defs::hip_flip_motor_dir_idx];
-        exo_data->config[config_defs::knee_flip_motor_dir_idx] = msg.data[config_defs::knee_flip_motor_dir_idx];
-        exo_data->config[config_defs::ankle_flip_motor_dir_idx] = msg.data[config_defs::ankle_flip_motor_dir_idx];
-        exo_data->config[config_defs::elbow_flip_motor_dir_idx] = msg.data[config_defs::elbow_flip_motor_dir_idx];
-        exo_data->config[config_defs::arm_1_flip_motor_dir_idx] = msg.data[config_defs::arm_1_flip_motor_dir_idx];
-        exo_data->config[config_defs::arm_2_flip_motor_dir_idx] = msg.data[config_defs::arm_2_flip_motor_dir_idx];
-        exo_data->config[config_defs::hip_flip_torque_dir_idx] = msg.data[config_defs::hip_flip_torque_dir_idx];
-        exo_data->config[config_defs::knee_flip_torque_dir_idx] = msg.data[config_defs::knee_flip_torque_dir_idx];
-        exo_data->config[config_defs::ankle_flip_torque_dir_idx] = msg.data[config_defs::ankle_flip_torque_dir_idx];
-        exo_data->config[config_defs::elbow_flip_torque_dir_idx] = msg.data[config_defs::elbow_flip_torque_dir_idx];
-        exo_data->config[config_defs::arm_1_flip_torque_dir_idx] = msg.data[config_defs::arm_1_flip_torque_dir_idx];
-        exo_data->config[config_defs::arm_2_flip_torque_dir_idx] = msg.data[config_defs::arm_2_flip_torque_dir_idx];
-        exo_data->config[config_defs::hip_flip_angle_dir_idx] = msg.data[config_defs::hip_flip_angle_dir_idx];
-        exo_data->config[config_defs::knee_flip_angle_dir_idx] = msg.data[config_defs::knee_flip_angle_dir_idx];
-        exo_data->config[config_defs::ankle_flip_angle_dir_idx] = msg.data[config_defs::ankle_flip_angle_dir_idx];
-        exo_data->config[config_defs::elbow_flip_angle_dir_idx] = msg.data[config_defs::elbow_flip_angle_dir_idx];
-        exo_data->config[config_defs::arm_1_flip_angle_dir_idx] = msg.data[config_defs::arm_1_flip_angle_dir_idx];
-        exo_data->config[config_defs::arm_2_flip_angle_dir_idx] = msg.data[config_defs::arm_2_flip_angle_dir_idx];
+        const uint8_t config_len = (msg.len < ini_config::number_of_keys) ? msg.len : ini_config::number_of_keys;
+        for (uint8_t idx = 0; idx < config_len; idx++)
+        {
+            exo_data->config[idx] = msg.data[idx];
+        }
     }
 
     inline static void get_cal_trq_sensor(UARTHandler *handler, ExoData *exo_data, UART_msg_t msg)

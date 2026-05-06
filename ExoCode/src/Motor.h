@@ -18,6 +18,7 @@
 #include "ExoData.h"
 #include "ParseIni.h"
 #include "Board.h"
+#include "CAN.h"
 #include "Utilities.h"
 
 #include <stdint.h>
@@ -306,6 +307,93 @@ class AK45_10 : public _CANMotor
   	public:
           AK45_10(config_defs::joint_id id, ExoData* exo_data, int enable_pin); // Constructor: type is the motor type
           ~AK45_10(){};
+};
+
+struct PdaModelSpec
+{
+    float rated_torque_nm;
+    float peak_torque_nm;
+    float rated_speed_rpm;
+    float rated_current_a;
+    float stall_current_a;
+    float rotor_inertia_gcm2;
+};
+
+/**
+* @brief Base class for Dr. Empower PDA-series motors.
+*
+* PDA motors use the CAN physical layer, but their protocol is not the AK MIT
+* packet used by _CANMotor. Keep this parallel to _CANMotor so AK enable, zero,
+* and fixed-point packet assumptions do not leak into PDA commands.
+*/
+class PdaMotor : public _Motor
+{
+    public:
+        PdaMotor(config_defs::joint_id id, ExoData* exo_data, int enable_pin, const PdaModelSpec& spec);
+        ~PdaMotor(){};
+        void transaction(float torque);
+        void read_data();
+        void send_data(float torque);
+        void on_off();
+        bool enable();
+        bool enable(bool overide);
+        void zero();
+        float get_Kt();
+        void set_error();
+
+        bool send_torque_direct_nm(float torque_nm);
+        bool send_torque_ramp_nm_s(float torque_nm, float ramp_nm_s);
+        bool send_speed_rpm(float speed_rpm, float param, uint8_t mode);
+        bool send_position_deg(float angle_deg, float speed_rpm, float param, uint8_t mode);
+        bool send_adaptive_position_deg(float angle_deg, float speed_rpm, float torque_limit_nm);
+        bool send_impedance_deg_rpm_nm(float angle_deg, float speed_rpm, float tff_nm, float kp_nm_per_deg, float kd_nm_per_rpm, uint8_t mode);
+        bool send_motion_aid(float angle_deg, float speed_rpm, float angle_err_deg, float speed_err_rpm, float torque_nm);
+
+    protected:
+        uint16_t _frame_id(uint8_t cmd_id) const;
+        bool _is_feedback_frame(const CAN_message_t& msg) const;
+        void _decode_feedback(const CAN_message_t& msg);
+        void _decode_feedback(MotorData* motor_data, const CAN_message_t& msg);
+        bool _decode_any_pda_feedback(const CAN_message_t& msg);
+        MotorData* _get_pda_motor_data_by_pda_id(uint8_t pda_id) const;
+        void _send_command(uint8_t cmd_id, const uint8_t* data);
+        void _send_torque_command(float torque_nm, uint16_t input_mode, int16_t ramp_rate);
+        void _send_zero_torque();
+        void _send_write_property_u32(uint16_t param_address, uint16_t param_type, uint32_t value);
+        void _handle_timeout();
+        bool _can_send_motion_command();
+        bool _has_valid_pda_id() const;
+        bool _pda_id_is_unique() const;
+        bool _is_pda_motor_type(uint8_t motor_type) const;
+        float _apply_torque_limit(float torque_nm) const;
+        float _apply_speed_limit(float speed_rpm) const;
+        int16_t _scale_to_int16(float value, float scale) const;
+        uint16_t _scale_to_uint16(float value, float scale) const;
+        void _encode_float32_le(float val, uint8_t* data);
+        void _encode_uint32_le(uint32_t val, uint8_t* data);
+        void _encode_uint16_le(uint16_t val, uint8_t* data);
+        void _encode_int16_le(int16_t val, uint8_t* data);
+        float _decode_float32_le(const uint8_t* data);
+        int16_t _decode_int16_le(const uint8_t* data);
+
+        PdaModelSpec _spec;
+        uint8_t _pda_id;
+        bool _enable_response;
+        bool _feedback_configured;
+};
+
+class Pda08Motor : public PdaMotor
+{
+    public:
+        Pda08Motor(config_defs::joint_id id, ExoData* exo_data, int enable_pin);
+        ~Pda08Motor(){};
+};
+
+class Pda01Motor : public PdaMotor
+{
+    public:
+        Pda01Motor(config_defs::joint_id id, ExoData* exo_data, int enable_pin);
+        ~Pda01Motor(){};
 };
 
 #endif

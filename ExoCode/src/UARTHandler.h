@@ -27,7 +27,7 @@
 #define FIXED_POINT_FACTOR 100
 #define UART_BAUD 256000
 
-#define MAX_RX_LEN 64       //Bytes
+#define MAX_RX_LEN MAX_RAW_BUFFER_SIZE       //Bytes
 #define RX_TIMEOUT_US 1000  //Microseconds
 
 /* SLIP special character codes */
@@ -93,13 +93,13 @@ class UARTHandler
 
         void _pack(uint8_t msg_id, uint8_t len, uint8_t joint_id, float *data, uint8_t *data_to_pack);
 
-        UART_msg_t _unpack(uint8_t* data, uint8_t len);
+        UART_msg_t _unpack(uint8_t* data, uint16_t len);
 
         uint8_t _get_packed_length(uint8_t msg_id, uint8_t len, uint8_t joint_id, float *data);
 
         void _send_packet(uint8_t* p, uint8_t len);
 
-        int _recv_packet(uint8_t *p, uint8_t len = MAX_RX_LEN);
+        int _recv_packet(uint8_t *p, uint16_t len = MAX_RX_LEN);
 
         void _send_char(uint8_t val);
 
@@ -115,9 +115,9 @@ class UARTHandler
         float _timeout_us = RX_TIMEOUT_US;
         
         uint8_t _partial_packet[MAX_RX_LEN];
-        uint8_t _partial_packet_len = 0;
+        uint16_t _partial_packet_len = 0;
         uint8_t _msg_buffer[MAX_RX_LEN];
-        uint8_t _msg_buffer_len = 0;
+        uint16_t _msg_buffer_len = 0;
 
 };
 
