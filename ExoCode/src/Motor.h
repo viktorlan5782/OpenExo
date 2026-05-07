@@ -351,18 +351,32 @@ class PdaMotor : public _Motor
 
     protected:
         uint16_t _frame_id(uint8_t cmd_id) const;
+        uint16_t _frame_id_for(uint8_t pda_id, uint8_t cmd_id) const;
         bool _is_feedback_frame(const CAN_message_t& msg) const;
         void _decode_feedback(const CAN_message_t& msg);
         void _decode_feedback(MotorData* motor_data, const CAN_message_t& msg);
         bool _decode_any_pda_feedback(const CAN_message_t& msg);
         MotorData* _get_pda_motor_data_by_pda_id(uint8_t pda_id) const;
         void _send_command(uint8_t cmd_id, const uint8_t* data);
+        void _send_command_to_id(uint8_t pda_id, uint8_t cmd_id, const uint8_t* data);
         void _send_torque_command(float torque_nm, uint16_t input_mode, int16_t ramp_rate);
+        void _send_torque_command_to_id(uint8_t pda_id, float torque_nm, uint16_t input_mode, int16_t ramp_rate);
         void _send_zero_torque();
         void _send_write_property_u32(uint16_t param_address, uint16_t param_type, uint32_t value);
+        void _send_write_property_u32_to_id(uint8_t pda_id, uint16_t param_address, uint16_t param_type, uint32_t value);
+        void _send_read_property_u32(uint8_t pda_id, uint16_t param_address, uint16_t param_type);
+        void _configure_feedback_for_current_id();
+        void _run_can_id_autodetect();
+        void _adopt_pda_id(uint8_t pda_id);
         void _handle_timeout();
+        void _debug_print_tx(uint8_t pda_id, uint8_t cmd_id, const uint8_t* data, const char* label);
+        void _debug_print_rx(const CAN_message_t& msg, bool decoded_feedback);
+        void _debug_print_status(const char* label);
+        bool _debug_should_print(uint32_t* last_print_us, uint32_t interval_us);
         bool _can_send_motion_command();
         bool _has_valid_pda_id() const;
+        bool _is_valid_pda_command_id(uint8_t pda_id) const;
+        bool _can_autodetect_this_motor() const;
         bool _pda_id_is_unique() const;
         bool _is_pda_motor_type(uint8_t motor_type) const;
         float _apply_torque_limit(float torque_nm) const;
@@ -380,6 +394,12 @@ class PdaMotor : public _Motor
         uint8_t _pda_id;
         bool _enable_response;
         bool _feedback_configured;
+        uint8_t _detect_scan_id;
+        uint32_t _last_detect_probe_us;
+        uint32_t _last_feedback_config_us;
+        uint32_t _last_pda_debug_tx_us;
+        uint32_t _last_pda_debug_rx_us;
+        uint32_t _last_pda_debug_status_us;
 };
 
 class Pda08Motor : public PdaMotor

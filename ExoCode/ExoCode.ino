@@ -52,7 +52,9 @@ void setup()
     analogReadResolution(12);
     
     Serial.begin(115200);
-    //delay(500);
+    #if TEENSY_LOADER_SAFE_BOOT_DELAY_MS > 0
+        delay(TEENSY_LOADER_SAFE_BOOT_DELAY_MS);
+    #endif
 
     #ifdef SIMPLE_DEBUG
         Serial.print("\nIn SIMPLE_DEBUG mode, debugging statements are printed.");
@@ -64,12 +66,29 @@ void setup()
 
     //Get the config information from the SD card (calls function in ParseIni).
     ini_parser(config_info::config_to_send);              
+    #ifdef SIMPLE_DEBUG
+        Serial.println("\n[BOOT] ini_parser done.");
+    #endif
     
 	//Debugging ListCtrlParams
 	long initialTime = millis();
+    #ifdef SIMPLE_DEBUG
+        Serial.println("[BOOT] Building controller parameter table from SD CSV files...");
+    #endif
 	ctrl_param_array_gen(config_info::config_to_send);
+    #ifdef SIMPLE_DEBUG
+        Serial.println("[BOOT] Controller parameter table done.");
+        Serial.println("[BOOT] Building plotting titles...");
+    #endif
 	create_plotting_titles(config_info::config_to_send);
+    #ifdef SIMPLE_DEBUG
+        Serial.println("[BOOT] Plotting titles done.");
+        Serial.println("[BOOT] Sending metadata to Nano on Serial8. This can wait up to 9 seconds for Nano ready.");
+    #endif
 	send_bulk_char();
+    #ifdef SIMPLE_DEBUG
+        Serial.println("[BOOT] Metadata send stage done.");
+    #endif
 	long time_spent = millis() - initialTime;
 	Serial.print("\nTeensy Boot time added: ");
 	Serial.print(time_spent);
@@ -132,7 +151,13 @@ void loop()
         first_run = false;
 
         //Waits for the message telling it to get the config information 
+        #ifdef SIMPLE_DEBUG
+            Serial.println("\n[BOOT] Waiting for config request from Nano/GUI...");
+        #endif
         UART_command_utils::wait_for_get_config(uart_handler, &exo_data, UART_times::CONFIG_TIMEOUT);
+        #ifdef SIMPLE_DEBUG
+            Serial.println("[BOOT] Config request wait finished.");
+        #endif
 
         //Print detailing which joint and side is used
         #ifdef MAIN_DEBUG

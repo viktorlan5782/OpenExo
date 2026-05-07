@@ -12,6 +12,8 @@
 #include "Arduino.h"
 #include "LogLevels.h"
 	#define SIMPLE_DEBUG //Uncomment to enter SIMPLE_DEBUG mode. The exoskeleton’s operating status will be printed to the Serial Monitor.
+    #define PDA_DEBUG //Comment out after PDA CAN bring-up to silence throttled PDA TX/RX Serial debug.
+    #define TEENSY_LOADER_SAFE_BOOT_DELAY_MS 2000 // Set to 0 after bring-up if Teensy Loader no longer disables Auto Mode.
     #define FIRMWARE_VERSION 0_1_0
 
     #define AK_Board_V0_1 1
@@ -95,6 +97,10 @@
         const float PDA01_ROTOR_INERTIA_GCM2 = 4.92f;   // g*cm^2
         const uint32_t FEEDBACK_PERIOD_MS = 10;         // ms, 100 Hz for phase-1 single-joint tests
         const uint32_t FEEDBACK_TIMEOUT_US = 30000;     // us, 3 missed 10 ms feedback periods
+        const bool AUTO_DETECT_CAN_ID = false;          // Fixed-ID bench mode. Set true only when config ID is unknown.
+        const uint32_t DETECT_PROBE_PERIOD_US = 2000;   // us, one CAN ID probe per 500 Hz control loop
+        const uint32_t CONFIG_RETRY_PERIOD_US = 250000; // us, retry feedback enable while no feedback has arrived
+        const uint32_t DEBUG_PRINT_PERIOD_US = 250000;  // us, throttle PDA TX/RX debug output
     }
 
     namespace BLE_times

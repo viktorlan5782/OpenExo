@@ -5,6 +5,7 @@ import logging
 import os
 import sys
 import traceback
+from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Optional
 
@@ -24,6 +25,36 @@ UART_SERVICE_UUID = "6E400001-B5A3-F393-E0A9-E50E24DCCA9E"
 UART_TX_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"  # Write
 UART_RX_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"  # Notify
 ERROR_CHAR_UUID = "33b65d43-611c-11ed-9b6a-0242ac120002"  # Notify
+
+
+@asynccontextmanager
+async def _async_timeout(seconds: float):
+    """Compatibility wrapper for asyncio.timeout, which requires Python 3.11+."""
+    native_timeout = getattr(asyncio, "timeout", None)
+    if native_timeout is not None:
+        async with native_timeout(seconds):
+            yield
+        return
+
+    task = asyncio.current_task()
+    loop = asyncio.get_event_loop()
+    expired = False
+
+    def _cancel_task():
+        nonlocal expired
+        expired = True
+        if task is not None:
+            task.cancel()
+
+    handle = loop.call_later(seconds, _cancel_task)
+    try:
+        yield
+    except asyncio.CancelledError as ex:
+        if expired:
+            raise asyncio.TimeoutError() from ex
+        raise
+    finally:
+        handle.cancel()
 
 
 class QtExoDeviceManager(QtCore.QObject):
@@ -286,7 +317,7 @@ class QtExoDeviceManager(QtCore.QObject):
                 self.connectScanProgress.emit(0)
                 self.connectionProgress.emit(0)
                 # Wrap entire connection process in timeout (40 seconds total - 4 attempts × 10s each)
-                async with asyncio.timeout(40):
+                async with _async_timeout(40):
                     attempts = 4
                     for attempt in range(attempts):
                         # Scanning phase progress: each attempt gets 25% (0-100%)
@@ -334,13 +365,27 @@ class QtExoDeviceManager(QtCore.QObject):
                                 self.connectionProgress.emit(20)
                                 self.log.emit("Connecting to device…")
                                 print(f"[QtExoDeviceManager] connecting to {device.name} {device.address}")
+
                                 def _disc_cb(_):
                                     try:
                                         self._mark_disconnected("link lost")
                                     except Exception:
                                         pass
+
                                 client = BleakClient(device, disconnected_callback=_disc_cb)
-                                ok = await client.connect()
+                                try:
+                                    ok = await client.connect()
+                                except Exception as ce:
+                                    self.logger.warning(f"Connect attempt {attempt+1} failed: {ce}")
+                                    self.log.emit(f"Connect attempt {attempt+1} failed: {ce}")
+                                    self.connectionProgress.emit(0)
+                                    try:
+                                        await client.disconnect()
+                                    except Exception:
+                                        pass
+                                    await asyncio.sleep(2)
+                                    continue
+
                                 self.connectionProgress.emit(50)
                                 print(f"[QtExoDeviceManager] connect() returned={ok}, is_connected={getattr(client, 'is_connected', False)}")
                                 if not getattr(client, "is_connected", False):

@@ -129,6 +129,29 @@ namespace UART_command_enums
  */
 namespace UART_command_handlers
 {
+    inline static bool is_pda_motor_type(uint8_t motor_type)
+    {
+        return (motor_type == (uint8_t)config_defs::motor::PDA08) ||
+               (motor_type == (uint8_t)config_defs::motor::PDA01);
+    }
+
+    inline static float measured_torque_for_plot(JointData *j_data, bool use_torque_sensor)
+    {
+        if (j_data == NULL)
+        {
+            return 0.0f;
+        }
+
+        if (!use_torque_sensor &&
+            is_pda_motor_type(j_data->motor.motor_type) &&
+            j_data->motor.pda_feedback_valid)
+        {
+            return j_data->motor.pda_torque_nm * j_data->motor.gearing;
+        }
+
+        return j_data->controller.filtered_torque_reading;
+    }
+
     inline static void get_controller_params(UARTHandler *handler, ExoData *exo_data, UART_msg_t msg)
     {
          //logger::println("UART_command_handlers::update_controller_params->Fetching params with msg: ");
@@ -329,16 +352,49 @@ namespace UART_command_handlers
         case (uint8_t)config_defs::exo_name::bilateral_hip:
 		{
             rx_msg.len = (uint8_t)rt_data::BILATERAL_HIP_RT_LEN;
-            rx_msg.data[0] = exo_data->right_side.hip.controller.filtered_torque_reading;
-            rx_msg.data[1] = exo_data->right_side.hip.controller.desired_torque;
-            rx_msg.data[2] = exo_data->left_side.hip.controller.filtered_torque_reading;
-            rx_msg.data[3] = exo_data->left_side.hip.controller.desired_torque;
-            rx_msg.data[4] = exo_data->right_side.percent_gait / 100;
-            rx_msg.data[5] = exo_data->right_side.toe_fsr;
-            rx_msg.data[6] = exo_data->left_side.percent_gait / 100;
-            rx_msg.data[7] = exo_data->left_side.toe_fsr;
-            rx_msg.data[8] = exo_data->right_side.heel_fsr;
-            rx_msg.data[9] = exo_data->left_side.heel_fsr;
+            const uint8_t exo_side = config[config_defs::exo_side_idx];
+            const bool use_hip_torque_sensor =
+                config[config_defs::hip_use_torque_sensor_idx] == (uint8_t)config_defs::use_torque_sensor::yes;
+
+            if (exo_side == (uint8_t)config_defs::exo_side::left)
+            {
+                rx_msg.data[0] = measured_torque_for_plot(&exo_data->left_side.hip, use_hip_torque_sensor);
+                rx_msg.data[1] = exo_data->left_side.hip.controller.desired_torque;
+                rx_msg.data[2] = 0.0f;
+                rx_msg.data[3] = 0.0f;
+                rx_msg.data[4] = exo_data->left_side.percent_gait / 100;
+                rx_msg.data[5] = exo_data->left_side.toe_fsr;
+                rx_msg.data[6] = 0.0f;
+                rx_msg.data[7] = 0.0f;
+                rx_msg.data[8] = exo_data->left_side.heel_fsr;
+                rx_msg.data[9] = 0.0f;
+            }
+            else if (exo_side == (uint8_t)config_defs::exo_side::right)
+            {
+                rx_msg.data[0] = measured_torque_for_plot(&exo_data->right_side.hip, use_hip_torque_sensor);
+                rx_msg.data[1] = exo_data->right_side.hip.controller.desired_torque;
+                rx_msg.data[2] = 0.0f;
+                rx_msg.data[3] = 0.0f;
+                rx_msg.data[4] = exo_data->right_side.percent_gait / 100;
+                rx_msg.data[5] = exo_data->right_side.toe_fsr;
+                rx_msg.data[6] = 0.0f;
+                rx_msg.data[7] = 0.0f;
+                rx_msg.data[8] = exo_data->right_side.heel_fsr;
+                rx_msg.data[9] = 0.0f;
+            }
+            else
+            {
+                rx_msg.data[0] = measured_torque_for_plot(&exo_data->right_side.hip, use_hip_torque_sensor);
+                rx_msg.data[1] = exo_data->right_side.hip.controller.desired_torque;
+                rx_msg.data[2] = measured_torque_for_plot(&exo_data->left_side.hip, use_hip_torque_sensor);
+                rx_msg.data[3] = exo_data->left_side.hip.controller.desired_torque;
+                rx_msg.data[4] = exo_data->right_side.percent_gait / 100;
+                rx_msg.data[5] = exo_data->right_side.toe_fsr;
+                rx_msg.data[6] = exo_data->left_side.percent_gait / 100;
+                rx_msg.data[7] = exo_data->left_side.toe_fsr;
+                rx_msg.data[8] = exo_data->right_side.heel_fsr;
+                rx_msg.data[9] = exo_data->left_side.heel_fsr;
+            }
 			rx_msg.data[10] = exo_data->get_batt_info(0); //Not saved in the CSV file
             break;
 		}

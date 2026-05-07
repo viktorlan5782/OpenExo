@@ -1,0 +1,6 @@
+can.c:32:6:MX_CAN_Init	8	static
+can.c:64:6:HAL_CAN_MspInit	40	static
+can.c:100:6:HAL_CAN_MspDeInit	16	static
+can.c:126:6:Can_Config	48	static
+can.c:152:9:Can_Send_Msg	56	static
+can.c:175:7:HAL_CAN_RxFifo0MsgPendingCallback	48	static

@@ -7,7 +7,7 @@
 //We only need to parse the INI file if we have access to the SD card.
 //The nano will get the info through SPI so doesn't need these functions.
 #if defined(ARDUINO_TEENSY36)  || defined(ARDUINO_TEENSY41) 
-    void ini_print_error_message(uint8_t e, bool eol = true)
+    void ini_print_error_message(uint8_t e, bool eol)
     {
         if(Serial)
         {
@@ -172,7 +172,7 @@
         strcat(key, "PdaCanId");
         if (get_section_key_optional(ini, "PDA", key, buffer, buffer_len) && buffer[0] != '\0')
         {
-            config_to_send[can_id_idx] = clamp_u8(atoi(buffer), 1, 63);
+            config_to_send[can_id_idx] = clamp_u8(atoi(buffer), 0, 63);
         }
 
         strcpy(key, key_prefix);

@@ -50,6 +50,40 @@ inline const char* getColumnHeader(uint8_t column_index, uint8_t* config_to_send
 		
         case (uint8_t)config_defs::exo_name::bilateral_hip:
         {
+            if (config_to_send[config_defs::exo_side_idx] == (uint8_t)config_defs::exo_side::left) {
+                switch (column_index) {
+                    case 0:  return "Measured Torque (L)";
+                    case 1:  return "Desired Torque (L)";
+                    case 2:  return "Inactive Measured Torque";
+                    case 3:  return "Inactive Desired Torque";
+                    case 4:  return "Gait/100 (L)";
+                    case 5:  return "Toe FSR (L)";
+                    case 6:  return "Inactive Gait/100";
+                    case 7:  return "Inactive Toe FSR";
+                    case 8:  return "Heel FSR (L)";
+                    case 9:  return "Inactive Heel FSR";
+                    case 10: return "Battery Level (Volts)";
+                    default: return "INVALID_COL";
+                }
+            }
+
+            if (config_to_send[config_defs::exo_side_idx] == (uint8_t)config_defs::exo_side::right) {
+                switch (column_index) {
+                    case 0:  return "Measured Torque (R)";
+                    case 1:  return "Desired Torque (R)";
+                    case 2:  return "Inactive Measured Torque";
+                    case 3:  return "Inactive Desired Torque";
+                    case 4:  return "Gait/100 (R)";
+                    case 5:  return "Toe FSR (R)";
+                    case 6:  return "Inactive Gait/100";
+                    case 7:  return "Inactive Toe FSR";
+                    case 8:  return "Heel FSR (R)";
+                    case 9:  return "Inactive Heel FSR";
+                    case 10: return "Battery Level (Volts)";
+                    default: return "INVALID_COL";
+                }
+            }
+
             // Inner switch: Selects the specific column name for this mode (0-based)
             switch (column_index) {
                 case 0:  return "Measured Torque (R)";

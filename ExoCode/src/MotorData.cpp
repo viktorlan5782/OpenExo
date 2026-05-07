@@ -178,7 +178,7 @@ static void motor_data_load_pda_config(MotorData* motor, uint8_t* config_to_send
     const uint8_t raw_control_mode = config_to_send[motor_data_pda_control_mode_idx(motor->id)];
 
     motor->pda_id = raw_can_id;
-    if (motor_data_is_pda_motor(motor->motor_type) && motor->pda_id == 0)
+    if (motor_data_is_pda_motor(motor->motor_type) && motor->pda_id == 0 && !pda_config::AUTO_DETECT_CAN_ID)
     {
         motor->pda_id = motor_data_default_pda_id(motor->id);
     }

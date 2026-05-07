@@ -1,0 +1,10 @@
+bilateral=False
+last_joint=Hip(L) (65)
+last_controller=constantT
+last_parameter=0
+last_value=1.0
+controller_value_65_4_0=1.0
+controller_value_65_5_1=5.0
+controller_value_65_5_0=5.0
+controller_value_65_2_0=0.0
+controller_value_65_4_1=0.0

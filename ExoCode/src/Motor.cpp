@@ -690,6 +690,7 @@ namespace pda_cmd
     const uint8_t SET_POSITION_FF = 0x1B;
     const uint8_t SET_SPEED = 0x1C;
     const uint8_t SET_TORQUE = 0x1D;
+    const uint8_t READ_PROPERTY = 0x1E;
     const uint8_t WRITE_PROPERTY = 0x1F;
 
     const uint16_t INPUT_MODE_PASSTHROUGH = 1;
@@ -722,6 +723,12 @@ PdaMotor::PdaMotor(config_defs::joint_id id, ExoData* exo_data, int enable_pin, 
     _pda_id = _motor_data->pda_id;
     _enable_response = false;
     _feedback_configured = false;
+    _detect_scan_id = 1;
+    _last_detect_probe_us = 0;
+    _last_feedback_config_us = 0;
+    _last_pda_debug_tx_us = 0;
+    _last_pda_debug_rx_us = 0;
+    _last_pda_debug_status_us = 0;
 
     _Kt = 1.0f;
     _motor_data->kt = _Kt;
@@ -743,7 +750,9 @@ PdaMotor::PdaMotor(config_defs::joint_id id, ExoData* exo_data, int enable_pin, 
         _motor_data->pda_speed_limit_rpm = _spec.rated_speed_rpm;
     }
 
-    if (!_has_valid_pda_id() || !_pda_id_is_unique())
+    const bool can_autodetect_invalid_id = pda_config::AUTO_DETECT_CAN_ID && (_pda_id == 0);
+    if ((!_has_valid_pda_id() && !can_autodetect_invalid_id) ||
+        (_has_valid_pda_id() && !_pda_id_is_unique()))
     {
         _error = true;
         _motor_data->enabled = false;
@@ -758,12 +767,22 @@ PdaMotor::PdaMotor(config_defs::joint_id id, ExoData* exo_data, int enable_pin, 
 
 uint16_t PdaMotor::_frame_id(uint8_t cmd_id) const
 {
-    return ((uint16_t)_pda_id << 5) + cmd_id;
+    return _frame_id_for(_pda_id, cmd_id);
+}
+
+uint16_t PdaMotor::_frame_id_for(uint8_t pda_id, uint8_t cmd_id) const
+{
+    return ((uint16_t)pda_id << 5) + cmd_id;
 }
 
 bool PdaMotor::_has_valid_pda_id() const
 {
     return (_pda_id >= 1) && (_pda_id <= 63);
+}
+
+bool PdaMotor::_is_valid_pda_command_id(uint8_t pda_id) const
+{
+    return pda_id <= 63;
 }
 
 bool PdaMotor::_is_pda_motor_type(uint8_t motor_type) const
@@ -800,6 +819,35 @@ bool PdaMotor::_pda_id_is_unique() const
         }
     }
     return true;
+}
+
+bool PdaMotor::_can_autodetect_this_motor() const
+{
+    uint8_t pda_motor_count = 0;
+    JointData* joints[] = {
+        &_data->left_side.hip,
+        &_data->left_side.knee,
+        &_data->left_side.ankle,
+        &_data->left_side.elbow,
+        &_data->left_side.arm_1,
+        &_data->left_side.arm_2,
+        &_data->right_side.hip,
+        &_data->right_side.knee,
+        &_data->right_side.ankle,
+        &_data->right_side.elbow,
+        &_data->right_side.arm_1,
+        &_data->right_side.arm_2
+    };
+
+    for (uint8_t idx = 0; idx < 12; idx++)
+    {
+        if (joints[idx]->is_used && _is_pda_motor_type(joints[idx]->motor.motor_type))
+        {
+            pda_motor_count++;
+        }
+    }
+
+    return pda_motor_count == 1;
 }
 
 void PdaMotor::_encode_float32_le(float val, uint8_t* data)
@@ -880,6 +928,7 @@ float PdaMotor::_apply_speed_limit(float speed_rpm) const
 void PdaMotor::transaction(float torque)
 {
     read_data();
+    _run_can_id_autodetect();
     _handle_timeout();
     send_data(torque);
 }
@@ -889,12 +938,13 @@ void PdaMotor::read_data()
     CAN* can = CAN::getInstance();
     CAN_message_t msg;
 
-    if (!can->read(msg))
+    uint8_t frames_read = 0;
+    while ((frames_read < 8) && can->read(msg))
     {
-        return;
+        const bool decoded_feedback = _decode_any_pda_feedback(msg);
+        _debug_print_rx(msg, decoded_feedback);
+        frames_read++;
     }
-
-    _decode_any_pda_feedback(msg);
 }
 
 bool PdaMotor::_is_feedback_frame(const CAN_message_t& msg) const
@@ -946,13 +996,52 @@ bool PdaMotor::_decode_any_pda_feedback(const CAN_message_t& msg)
     }
 
     const uint8_t pda_id = (uint8_t)((msg.id & 0x07E0) >> 5);
+    const uint8_t cmd_id = (uint8_t)(msg.id & 0x001F);
+    const uint16_t property_address = (uint16_t)msg.buf[0] | ((uint16_t)msg.buf[1] << 8);
+    const uint16_t property_type = (uint16_t)msg.buf[2] | ((uint16_t)msg.buf[3] << 8);
+    const bool is_known_property_response =
+        (cmd_id == pda_cmd::READ_PROPERTY) &&
+        (property_type <= 3) &&
+        ((property_address == 22001) ||
+         (property_address == 30003) ||
+         (property_address == 31001) ||
+         (property_address == 31002));
+    const bool is_property_frame = (cmd_id == pda_cmd::WRITE_PROPERTY) || is_known_property_response;
     MotorData* target_motor_data = _get_pda_motor_data_by_pda_id(pda_id);
     if (target_motor_data == NULL)
     {
+        if (pda_config::AUTO_DETECT_CAN_ID &&
+            _can_autodetect_this_motor() &&
+            _motor_data->enabled &&
+            _motor_data->is_on &&
+            !_data->estop &&
+            !_error &&
+            (pda_id >= 1) &&
+            (pda_id <= 63))
+        {
+            _adopt_pda_id(pda_id);
+
+            if (is_property_frame)
+            {
+                return true;
+            }
+
+            _decode_feedback(_motor_data, msg);
+            return true;
+        }
+
         return false;
     }
 
-    _decode_feedback(target_motor_data, msg);
+    if (target_motor_data == _motor_data && _pda_id != pda_id)
+    {
+        _adopt_pda_id(pda_id);
+    }
+
+    if (!is_property_frame)
+    {
+        _decode_feedback(target_motor_data, msg);
+    }
     return true;
 }
 
@@ -992,7 +1081,12 @@ void PdaMotor::send_data(float torque)
 
 bool PdaMotor::_can_send_motion_command()
 {
-    if (!_motor_data->enabled || !_motor_data->is_on || _data->estop || _error || (_motor_data->timeout_count > 0))
+    if (!_motor_data->enabled ||
+        !_motor_data->is_on ||
+        _data->estop ||
+        _error ||
+        !_motor_data->pda_feedback_valid ||
+        (_motor_data->timeout_count > 0))
     {
         _send_zero_torque();
         return false;
@@ -1002,14 +1096,19 @@ bool PdaMotor::_can_send_motion_command()
 
 void PdaMotor::_send_command(uint8_t cmd_id, const uint8_t* data)
 {
-    if (!_has_valid_pda_id())
+    _send_command_to_id(_pda_id, cmd_id, data);
+}
+
+void PdaMotor::_send_command_to_id(uint8_t pda_id, uint8_t cmd_id, const uint8_t* data)
+{
+    if (!_is_valid_pda_command_id(pda_id))
     {
         return;
     }
 
     CAN_message_t msg;
     msg.flags.extended = 0;
-    msg.id = _frame_id(cmd_id);
+    msg.id = _frame_id_for(pda_id, cmd_id);
     msg.len = 8;
 
     for (uint8_t idx = 0; idx < 8; idx++)
@@ -1019,15 +1118,21 @@ void PdaMotor::_send_command(uint8_t cmd_id, const uint8_t* data)
 
     CAN* can = CAN::getInstance();
     can->send(msg);
+    _debug_print_tx(pda_id, cmd_id, data, "TX");
 }
 
 void PdaMotor::_send_torque_command(float torque_nm, uint16_t input_mode, int16_t ramp_rate)
+{
+    _send_torque_command_to_id(_pda_id, torque_nm, input_mode, ramp_rate);
+}
+
+void PdaMotor::_send_torque_command_to_id(uint8_t pda_id, float torque_nm, uint16_t input_mode, int16_t ramp_rate)
 {
     uint8_t data[8];
     _encode_float32_le(torque_nm, &data[0]);
     _encode_int16_le(ramp_rate, &data[4]);
     _encode_uint16_le(input_mode, &data[6]);
-    _send_command(pda_cmd::SET_TORQUE, data);
+    _send_command_to_id(pda_id, pda_cmd::SET_TORQUE, data);
 }
 
 void PdaMotor::_send_zero_torque()
@@ -1265,25 +1370,30 @@ bool PdaMotor::enable(bool overide)
         _motor_data->enabled = false;
     }
 
-    if ((_prev_motor_enabled != _motor_data->enabled) || overide || !_feedback_configured)
+    const bool can_enable_motion = _motor_data->enabled && _motor_data->is_on && !_error && !_data->estop;
+    const bool enable_state_changed = (_prev_motor_enabled != _motor_data->enabled);
+
+    if (can_enable_motion)
     {
-        if (_motor_data->enabled && _motor_data->is_on && !_error && !_data->estop)
+        if (enable_state_changed || overide || !_feedback_configured)
         {
             _motor_data->pda_last_feedback_us = micros();
             _motor_data->pda_feedback_valid = false;
             _motor_data->timeout_count = 0;
-            _send_write_property_u32(31002, 3, pda_config::FEEDBACK_PERIOD_MS);
-            _send_write_property_u32(22001, 3, 1);
-            _send_write_property_u32(30003, 3, 2);
-            _feedback_configured = true;
+            _configure_feedback_for_current_id();
             _enable_response = true;
         }
-        else
+    }
+    else
+    {
+        if (enable_state_changed || overide || _feedback_configured)
         {
             _send_zero_torque();
             _send_write_property_u32(30003, 3, 1);
-            _enable_response = false;
         }
+
+        _feedback_configured = false;
+        _enable_response = false;
     }
 
     _prev_motor_enabled = _motor_data->enabled;
@@ -1292,11 +1402,220 @@ bool PdaMotor::enable(bool overide)
 
 void PdaMotor::_send_write_property_u32(uint16_t param_address, uint16_t param_type, uint32_t value)
 {
+    _send_write_property_u32_to_id(_pda_id, param_address, param_type, value);
+}
+
+void PdaMotor::_send_write_property_u32_to_id(uint8_t pda_id, uint16_t param_address, uint16_t param_type, uint32_t value)
+{
     uint8_t data[8];
     _encode_uint16_le(param_address, &data[0]);
     _encode_uint16_le(param_type, &data[2]);
     _encode_uint32_le(value, &data[4]);
-    _send_command(pda_cmd::WRITE_PROPERTY, data);
+    _send_command_to_id(pda_id, pda_cmd::WRITE_PROPERTY, data);
+}
+
+void PdaMotor::_send_read_property_u32(uint8_t pda_id, uint16_t param_address, uint16_t param_type)
+{
+    uint8_t data[8];
+    _encode_uint16_le(param_address, &data[0]);
+    _encode_uint16_le(param_type, &data[2]);
+    _encode_uint32_le(0, &data[4]);
+    _send_command_to_id(pda_id, pda_cmd::READ_PROPERTY, data);
+}
+
+void PdaMotor::_configure_feedback_for_current_id()
+{
+    if (!_has_valid_pda_id())
+    {
+        return;
+    }
+
+    _last_feedback_config_us = micros();
+    _debug_print_status("PDA_CONFIGURE_FEEDBACK");
+    _send_write_property_u32(31002, 3, pda_config::FEEDBACK_PERIOD_MS);
+    _send_write_property_u32(22001, 3, 1);
+    _send_write_property_u32(30003, 3, 2);
+    _send_read_property_u32(_pda_id, 31001, 3);
+    _feedback_configured = true;
+}
+
+void PdaMotor::_run_can_id_autodetect()
+{
+    if (_has_valid_pda_id() ||
+        !pda_config::AUTO_DETECT_CAN_ID ||
+        !_can_autodetect_this_motor() ||
+        _motor_data->pda_feedback_valid ||
+        !_motor_data->enabled ||
+        !_motor_data->is_on ||
+        _data->estop ||
+        _error)
+    {
+        return;
+    }
+
+    const uint32_t now_us = micros();
+    if ((now_us - _last_detect_probe_us) < pda_config::DETECT_PROBE_PERIOD_US)
+    {
+        return;
+    }
+
+    _last_detect_probe_us = now_us;
+    _send_read_property_u32(_detect_scan_id, 31001, 3);
+    _detect_scan_id++;
+    if (_detect_scan_id > 63)
+    {
+        _detect_scan_id = 1;
+    }
+}
+
+void PdaMotor::_adopt_pda_id(uint8_t pda_id)
+{
+    if (pda_id < 1 || pda_id > 63)
+    {
+        return;
+    }
+
+    if (_pda_id != pda_id)
+    {
+        _pda_id = pda_id;
+        _motor_data->pda_id = pda_id;
+
+        #ifdef SIMPLE_DEBUG
+            Serial.print("PDA_CAN_ID_DETECTED=");
+            Serial.println(_pda_id);
+        #endif
+    }
+
+    _error = false;
+    _enable_response = true;
+    _motor_data->timeout_count = 0;
+    _motor_data->pda_last_feedback_us = micros();
+    _configure_feedback_for_current_id();
+}
+
+bool PdaMotor::_debug_should_print(uint32_t* last_print_us, uint32_t interval_us)
+{
+    const uint32_t now_us = micros();
+    if (*last_print_us == 0)
+    {
+        *last_print_us = now_us;
+        return true;
+    }
+
+    if ((now_us - *last_print_us) < interval_us)
+    {
+        return false;
+    }
+
+    *last_print_us = now_us;
+    return true;
+}
+
+void PdaMotor::_debug_print_tx(uint8_t pda_id, uint8_t cmd_id, const uint8_t* data, const char* label)
+{
+#ifdef PDA_DEBUG
+    const bool always_print = (cmd_id == pda_cmd::READ_PROPERTY) || (cmd_id == pda_cmd::WRITE_PROPERTY);
+    if (!always_print && !_debug_should_print(&_last_pda_debug_tx_us, pda_config::DEBUG_PRINT_PERIOD_US))
+    {
+        return;
+    }
+
+    Serial.print("PDA_");
+    Serial.print(label);
+    Serial.print(" id=");
+    Serial.print(pda_id);
+    Serial.print(" arb=0x");
+    Serial.print(_frame_id_for(pda_id, cmd_id), HEX);
+    Serial.print(" cmd=0x");
+    Serial.print(cmd_id, HEX);
+    Serial.print(" data=");
+    for (uint8_t idx = 0; idx < 8; idx++)
+    {
+        if (data[idx] < 16)
+        {
+            Serial.print('0');
+        }
+        Serial.print(data[idx], HEX);
+        if (idx < 7)
+        {
+            Serial.print(' ');
+        }
+    }
+
+    if (cmd_id == pda_cmd::SET_TORQUE)
+    {
+        Serial.print(" torqueNm=");
+        Serial.print(_decode_float32_le(&data[0]), 3);
+    }
+
+    Serial.print(" feedback=");
+    Serial.print(_motor_data->pda_feedback_valid ? 1 : 0);
+    Serial.print(" timeout=");
+    Serial.println(_motor_data->timeout_count);
+#else
+    (void)pda_id;
+    (void)cmd_id;
+    (void)data;
+    (void)label;
+#endif
+}
+
+void PdaMotor::_debug_print_rx(const CAN_message_t& msg, bool decoded_feedback)
+{
+#ifdef PDA_DEBUG
+    const uint8_t cmd_id = (uint8_t)(msg.id & 0x001F);
+    const bool always_print = (cmd_id == pda_cmd::READ_PROPERTY) || (cmd_id == pda_cmd::WRITE_PROPERTY);
+    if (!always_print && !_debug_should_print(&_last_pda_debug_rx_us, pda_config::DEBUG_PRINT_PERIOD_US))
+    {
+        return;
+    }
+
+    Serial.print("PDA_RX arb=0x");
+    Serial.print(msg.id, HEX);
+    Serial.print(" id=");
+    Serial.print((uint8_t)((msg.id & 0x07E0) >> 5));
+    Serial.print(" cmd=0x");
+    Serial.print(cmd_id, HEX);
+    Serial.print(" len=");
+    Serial.print(msg.len);
+    Serial.print(" feedback=");
+    Serial.print(decoded_feedback ? 1 : 0);
+    Serial.print(" valid=");
+    Serial.print(_motor_data->pda_feedback_valid ? 1 : 0);
+    Serial.print(" pdaAngleDeg=");
+    Serial.print(_motor_data->pda_angle_deg, 2);
+    Serial.print(" pdaSpeedRpm=");
+    Serial.print(_motor_data->pda_speed_rpm, 2);
+    Serial.print(" pdaTorqueNm=");
+    Serial.println(_motor_data->pda_torque_nm, 3);
+#else
+    (void)msg;
+    (void)decoded_feedback;
+#endif
+}
+
+void PdaMotor::_debug_print_status(const char* label)
+{
+#ifdef PDA_DEBUG
+    if (!_debug_should_print(&_last_pda_debug_status_us, pda_config::DEBUG_PRINT_PERIOD_US))
+    {
+        return;
+    }
+
+    Serial.print(label);
+    Serial.print(" id=");
+    Serial.print(_pda_id);
+    Serial.print(" enabled=");
+    Serial.print(_motor_data->enabled ? 1 : 0);
+    Serial.print(" isOn=");
+    Serial.print(_motor_data->is_on ? 1 : 0);
+    Serial.print(" feedback=");
+    Serial.print(_motor_data->pda_feedback_valid ? 1 : 0);
+    Serial.print(" timeout=");
+    Serial.println(_motor_data->timeout_count);
+#else
+    (void)label;
+#endif
 }
 
 void PdaMotor::zero()
@@ -1322,10 +1641,25 @@ void PdaMotor::_handle_timeout()
 
     if (timed_out)
     {
+        if (pda_config::AUTO_DETECT_CAN_ID && !_motor_data->pda_feedback_valid && _can_autodetect_this_motor())
+        {
+            _send_zero_torque();
+            _motor_data->timeout_count = 0;
+            _motor_data->pda_last_feedback_us = now_us;
+            return;
+        }
+
         _motor_data->timeout_count++;
         _send_zero_torque();
 
-        if (_motor_data->timeout_count >= _motor_data->timeout_count_max)
+        if (!_motor_data->pda_feedback_valid &&
+            _has_valid_pda_id() &&
+            ((now_us - _last_feedback_config_us) >= pda_config::CONFIG_RETRY_PERIOD_US))
+        {
+            _configure_feedback_for_current_id();
+        }
+
+        if (_motor_data->pda_feedback_valid && (_motor_data->timeout_count >= _motor_data->timeout_count_max))
         {
             _error = true;
             _motor_data->enabled = false;

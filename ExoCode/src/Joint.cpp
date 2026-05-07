@@ -1159,8 +1159,8 @@ void AnkleJoint::run_joint()
             const float theta_rad = ankle_bowden_nku::saturate_angle_rad(_joint_data->transmission_joint_angle_rad);
             const float omega_rad_s = ankle_bowden_nku::valid_float(_joint_data->transmission_joint_velocity_rad_s) ? _joint_data->transmission_joint_velocity_rad_s : 0.0f;
 
-            _joint_data->joint_position = utils::ewma(theta_rad * ankle_bowden_nku::RAD_TO_DEG, _joint_data->joint_position, _joint_data->joint_position_alpha);
-            _joint_data->joint_velocity = utils::ewma(omega_rad_s * ankle_bowden_nku::RAD_TO_DEG, _joint_data->joint_velocity, _joint_data->joint_velocity_alpha);
+            _joint_data->joint_position = utils::ewma(theta_rad * ankle_bowden_nku::rad_to_deg, _joint_data->joint_position, _joint_data->joint_position_alpha);
+            _joint_data->joint_velocity = utils::ewma(omega_rad_s * ankle_bowden_nku::rad_to_deg, _joint_data->joint_velocity, _joint_data->joint_velocity_alpha);
         }
         else
         {

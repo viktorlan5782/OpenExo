@@ -30,6 +30,8 @@ class ActiveTrialSettingsPage(QtWidgets.QWidget):
             "parameter": None,
             "value": 0.0,
         }
+        self._parameter_value_cache: dict[tuple[str, str, int], float] = {}
+        self._current_value_key = None
         self._build_ui()
         self._load_settings()  # Load saved settings
 
@@ -90,6 +92,7 @@ class ActiveTrialSettingsPage(QtWidgets.QWidget):
         lpf = lbl_param.font(); lpf.setPointSize(UIConfig.FONT_LARGE); lbl_param.setFont(lpf)
         self.combo_param = QtWidgets.QComboBox()
         style_combo_box(self.combo_param, height=UIConfig.BTN_HEIGHT_XLARGE, font_size=UIConfig.FONT_LARGE)
+        self.combo_param.currentIndexChanged.connect(self._on_parameter_changed)
         form.addWidget(lbl_param, row, 0)
         form.addWidget(self.combo_param, row, 1)
         row += 1
@@ -105,6 +108,7 @@ class ActiveTrialSettingsPage(QtWidgets.QWidget):
         self.spin_value.setButtonSymbols(QtWidgets.QAbstractSpinBox.UpDownArrows)
         self.spin_value.setMinimumWidth(90)
         self.spin_value.setStyleSheet("QDoubleSpinBox::up-button, QDoubleSpinBox::down-button { width: 24px; }")
+        self.spin_value.valueChanged.connect(self._on_value_changed)
         form.addWidget(lbl_value, row, 0)
         form.addWidget(self.spin_value, row, 1)
 
@@ -183,6 +187,21 @@ class ActiveTrialSettingsPage(QtWidgets.QWidget):
             value = SettingsManager.get_float("last_value", 0.0)
             if value is not None:
                 self._last_selection["value"] = value
+
+            settings = SettingsManager.load_settings()
+            prefix = "controller_value_"
+            for key, raw_value in settings.items():
+                if not key.startswith(prefix):
+                    continue
+                parts = key[len(prefix):].rsplit("_", 2)
+                if len(parts) != 3:
+                    continue
+                joint_id, controller_id, param_idx_raw = parts
+                try:
+                    param_idx = int(param_idx_raw)
+                    self._parameter_value_cache[(joint_id, controller_id, param_idx)] = float(raw_value)
+                except (TypeError, ValueError):
+                    continue
         except Exception as e:
             print(f"Error loading settings: {e}")
 
@@ -212,6 +231,66 @@ class ActiveTrialSettingsPage(QtWidgets.QWidget):
             print(f"[Settings] Saved settings")
         except Exception as e:
             print(f"Error saving settings: {e}")
+
+    def _value_key_for_selection(self):
+        """Return a stable value key for the selected joint/controller/parameter."""
+        try:
+            joint_name = self.combo_joint.currentText()
+            controller_local_idx = self.combo_controller.currentIndex()
+            param_idx = self.combo_param.currentIndex()
+
+            if joint_name not in self._joint_controllers or controller_local_idx < 0 or param_idx < 0:
+                return None
+
+            controller_indices = self._joint_controllers[joint_name]
+            if controller_local_idx >= len(controller_indices):
+                return None
+
+            matrix_idx = controller_indices[controller_local_idx]
+            if matrix_idx >= len(self._controller_matrix):
+                return None
+
+            row = self._controller_matrix[matrix_idx]
+            if len(row) <= 3:
+                return None
+
+            return (str(row[1]), str(row[3]), int(param_idx))
+        except Exception:
+            return None
+
+    def _settings_key_for_value_key(self, value_key):
+        joint_id, controller_id, param_idx = value_key
+        return f"controller_value_{joint_id}_{controller_id}_{param_idx}"
+
+    def _cache_current_value(self):
+        if self._current_value_key is not None:
+            self._parameter_value_cache[self._current_value_key] = float(self.spin_value.value())
+
+    def _load_value_for_current_selection(self):
+        value_key = self._value_key_for_selection()
+        self._current_value_key = value_key
+
+        if value_key is None:
+            value = 0.0
+        else:
+            value = self._parameter_value_cache.get(value_key, 0.0)
+
+        self.spin_value.blockSignals(True)
+        self.spin_value.setValue(float(value))
+        self.spin_value.blockSignals(False)
+
+    @QtCore.Slot(int)
+    def _on_parameter_changed(self, idx: int):
+        """Keep parameter values independent per joint/controller/parameter."""
+        self._cache_current_value()
+        self._load_value_for_current_selection()
+
+    @QtCore.Slot(float)
+    def _on_value_changed(self, value: float):
+        value_key = self._value_key_for_selection()
+        if value_key is not None:
+            self._current_value_key = value_key
+            self._parameter_value_cache[value_key] = float(value)
 
     def _on_bilateral_changed(self, state):
         """Save bilateral state when checkbox changes."""
@@ -270,7 +349,10 @@ class ActiveTrialSettingsPage(QtWidgets.QWidget):
             value = self._last_selection.get("value", 0.0)
             if value is None:
                 value = 0.0
-            self.spin_value.setValue(float(value))
+            value_key = self._value_key_for_selection()
+            if value_key is not None and value_key not in self._parameter_value_cache:
+                self._parameter_value_cache[value_key] = float(value)
+            self._load_value_for_current_selection()
             
             print(f"[Settings] Successfully restored last selection")
         except Exception as e:
@@ -349,6 +431,11 @@ class ActiveTrialSettingsPage(QtWidgets.QWidget):
                             "value": value,
                         }
                         print(f"[Settings] Saving last selection: {self._last_selection}")
+                        value_key = (str(joint_id_raw), str(controller_id), int(parameter_idx))
+                        self._parameter_value_cache[value_key] = value
+                        SettingsManager.update_settings({
+                            self._settings_key_for_value_key(value_key): str(value)
+                        })
                         self._save_settings()
                         
                         self.applyRequested.emit(payload)
@@ -367,6 +454,7 @@ class ActiveTrialSettingsPage(QtWidgets.QWidget):
     def _on_cell_clicked(self, row: int, column: int):
         """When table cell is clicked, update the dropdowns to match that selection."""
         try:
+            self._cache_current_value()
             # The table now shows filtered rows for the selected joint
             # row index in table corresponds to controller index within the joint
             self.combo_controller.setCurrentIndex(row)
@@ -384,6 +472,7 @@ class ActiveTrialSettingsPage(QtWidgets.QWidget):
     def _on_joint_changed(self, idx: int):
         """When joint selection changes, update table to show only that joint's controllers."""
         try:
+            self._cache_current_value()
             joint_name = self.combo_joint.itemText(idx)
             
             # Filter the table to show only controllers for the selected joint
@@ -440,6 +529,7 @@ class ActiveTrialSettingsPage(QtWidgets.QWidget):
                 
                 # Trigger parameter update for first controller
                 self._on_controller_changed(0)
+                self._load_value_for_current_selection()
             else:
                 # No controllers for this joint
                 self.table.clear()
@@ -460,6 +550,7 @@ class ActiveTrialSettingsPage(QtWidgets.QWidget):
     def _on_controller_changed(self, idx: int):
         """Populate parameters combo from selected controller."""
         try:
+            self._cache_current_value()
             self.combo_param.blockSignals(True)
             self.combo_param.clear()
             
@@ -493,5 +584,6 @@ class ActiveTrialSettingsPage(QtWidgets.QWidget):
                 self.combo_param.blockSignals(False)
             except Exception:
                 pass
+            self._load_value_for_current_selection()
 
 

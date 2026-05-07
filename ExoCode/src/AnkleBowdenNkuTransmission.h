@@ -7,16 +7,16 @@
 namespace ankle_bowden_nku
 {
     static constexpr float PI_F = 3.14159265358979323846f;
-    static constexpr float DEG_TO_RAD = PI_F / 180.0f;
-    static constexpr float RAD_TO_DEG = 180.0f / PI_F;
+    static constexpr float deg_to_rad = PI_F / 180.0f;
+    static constexpr float rad_to_deg = 180.0f / PI_F;
 
     // Structural parameters. Units: m, rad, Nm.
     static constexpr float DRUM_RADIUS_M = 0.026f;
     static constexpr float ANKLE_ARM_M = 0.100f;
     static constexpr float SHEATH_TO_ATTACHMENT_M = 0.200f;
     static constexpr float BOWDEN_EFFICIENCY = 1.0f;
-    static constexpr float THETA_MIN_RAD = -30.0f * DEG_TO_RAD;
-    static constexpr float THETA_MAX_RAD = 50.0f * DEG_TO_RAD;
+    static constexpr float THETA_MIN_RAD = -30.0f * deg_to_rad;
+    static constexpr float THETA_MAX_RAD = 50.0f * deg_to_rad;
 
     static constexpr float MIN_VALID_JACOBIAN_ABS = 0.05f;
     static constexpr float MIN_VALID_TORQUE_GAIN_ABS = 0.05f;

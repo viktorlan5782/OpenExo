@@ -170,6 +170,14 @@ class MotorTimeoutError : public ErrorType
 
         bool check(JointData* _data)
         {
+            const bool is_pda_motor =
+                (_data->motor.motor_type == (uint8_t)config_defs::motor::PDA08) ||
+                (_data->motor.motor_type == (uint8_t)config_defs::motor::PDA01);
+            if (is_pda_motor && !_data->motor.pda_feedback_valid)
+            {
+                return false;
+            }
+
             const bool timeout_error = _data->motor.timeout_count >= _data->motor.timeout_count_max;
             if (timeout_error) 
             {
